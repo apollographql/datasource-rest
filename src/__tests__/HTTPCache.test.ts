@@ -1,356 +1,328 @@
-import { fetch, Request } from './mock-apollo-server-env';
-
-import FakeTimers from '@sinonjs/fake-timers';
-
+import fetch from 'node-fetch';
+import nock from 'nock';
 import { HTTPCache } from '../HTTPCache';
 import { MapKeyValueCache } from './MapKeyValueCache';
+import { nockAfterEach, nockBeforeEach } from './nockAssertions';
 
 describe('HTTPCache', () => {
   let store: MapKeyValueCache<string>;
   let httpCache: HTTPCache;
-  let clock: FakeTimers.InstalledClock;
-
-  beforeAll(() => {
-    clock = FakeTimers.install();
-  });
 
   beforeEach(() => {
-    fetch.mockReset();
-
+    nockBeforeEach();
     store = new MapKeyValueCache<string>();
-    httpCache = new HTTPCache(store as any);
+    httpCache = new HTTPCache(store, fetch);
+  });
+
+  afterEach(nockAfterEach);
+
+  beforeAll(() => {
+    // nock depends on process.nextTick
+    jest.useFakeTimers({ doNotFake: ['nextTick'] });
   });
 
   afterAll(() => {
-    clock.uninstall();
+    jest.useRealTimers();
   });
 
-  it('fetches a response from the origin when not cached', async () => {
-    fetch.mockJSONResponseOnce({ name: 'Ada Lovelace' });
-
-    const response = await httpCache.fetch(
-      new Request('https://api.example.com/people/1'),
+  const apiUrl = 'https://api.example.com';
+  const adaPath = '/people/1';
+  const adaUrl = `${apiUrl}${adaPath}`;
+  function mockGetAdaLovelace(headers: { [key: string]: string } = {}) {
+    return nock(apiUrl).get(adaPath).reply(
+      200,
+      {
+        name: 'Ada Lovelace',
+      },
+      headers,
     );
+  }
 
-    expect(fetch.mock.calls.length).toEqual(1);
+  function mockGetAlanTuring(headers: { [key: string]: string } = {}) {
+    return nock(apiUrl).get(adaPath).reply(
+      200,
+      {
+        name: 'Alan Turing',
+      },
+      headers,
+    );
+  }
+
+  function mockInternalServerError(headers: { [key: string]: string } = {}) {
+    return nock(apiUrl)
+      .get(adaPath)
+      .reply(500, 'Internal Server Error', headers);
+  }
+
+  it('fetches a response from the origin when not cached', async () => {
+    mockGetAdaLovelace();
+
+    const response = await httpCache.fetch(adaUrl);
+
     expect(await response.json()).toEqual({ name: 'Ada Lovelace' });
   });
 
   it('returns a cached response when not expired', async () => {
-    fetch.mockJSONResponseOnce(
-      { name: 'Ada Lovelace' },
-      { 'Cache-Control': 'max-age=30' },
-    );
+    mockGetAdaLovelace({ 'cache-control': 'max-age=30' });
 
-    await httpCache.fetch(new Request('https://api.example.com/people/1'));
+    await httpCache.fetch(adaUrl);
 
-    clock.tick(10000);
+    jest.advanceTimersByTime(10000);
 
-    const response = await httpCache.fetch(
-      new Request('https://api.example.com/people/1'),
-    );
+    const response = await httpCache.fetch(adaUrl);
 
-    expect(fetch.mock.calls.length).toEqual(1);
     expect(await response.json()).toEqual({ name: 'Ada Lovelace' });
-    expect(response.headers.get('Age')).toEqual('10');
+    expect(response.headers.get('age')).toEqual('10');
   });
 
   it('fetches a fresh response from the origin when expired', async () => {
-    fetch.mockJSONResponseOnce(
-      { name: 'Ada Lovelace' },
-      { 'Cache-Control': 'max-age=30' },
-    );
+    mockGetAdaLovelace({ 'cache-control': 'max-age=30' });
 
-    await httpCache.fetch(new Request('https://api.example.com/people/1'));
+    await httpCache.fetch(adaUrl);
 
-    clock.tick(30000);
+    jest.advanceTimersByTime(30000);
 
-    fetch.mockJSONResponseOnce(
-      { name: 'Alan Turing' },
-      { 'Cache-Control': 'max-age=30' },
-    );
+    mockGetAlanTuring({ 'cache-control': 'max-age=30' });
 
-    const response = await httpCache.fetch(
-      new Request('https://api.example.com/people/1'),
-    );
-
-    expect(fetch.mock.calls.length).toEqual(2);
+    const response = await httpCache.fetch('https://api.example.com/people/1');
 
     expect(await response.json()).toEqual({ name: 'Alan Turing' });
-    expect(response.headers.get('Age')).toEqual('0');
+    expect(response.headers.get('age')).toEqual('0');
   });
 
   describe('overriding TTL', () => {
     it('returns a cached response when the overridden TTL is not expired', async () => {
-      fetch.mockJSONResponseOnce(
-        { name: 'Ada Lovelace' },
-        {
-          'Cache-Control': 'private, no-cache',
-          'Set-Cookie': 'foo',
-        },
-      );
-
-      await httpCache.fetch(new Request('https://api.example.com/people/1'), {
-        cacheOptions: {
-          ttl: 30,
-        },
+      mockGetAdaLovelace({
+        'cache-control': 'private, no-cache',
+        'set-cookie': 'foo',
       });
 
-      clock.tick(10000);
-
-      const response = await httpCache.fetch(
-        new Request('https://api.example.com/people/1'),
+      await httpCache.fetch(
+        adaUrl,
+        {},
+        {
+          cacheOptions: {
+            ttl: 30,
+          },
+        },
       );
 
-      expect(fetch.mock.calls.length).toEqual(1);
+      jest.advanceTimersByTime(10000);
+
+      const response = await httpCache.fetch(adaUrl);
+
       expect(await response.json()).toEqual({ name: 'Ada Lovelace' });
-      expect(response.headers.get('Age')).toEqual('10');
+      expect(response.headers.get('age')).toEqual('10');
     });
 
     it('fetches a fresh response from the origin when the overridden TTL expired', async () => {
-      fetch.mockJSONResponseOnce(
-        { name: 'Ada Lovelace' },
-        {
-          'Cache-Control': 'private, no-cache',
-          'Set-Cookie': 'foo',
-        },
-      );
-
-      await httpCache.fetch(new Request('https://api.example.com/people/1'), {
-        cacheOptions: {
-          ttl: 30,
-        },
+      mockGetAdaLovelace({
+        'cache-control': 'private, no-cache',
+        'set-cookie': 'foo',
       });
 
-      clock.tick(30000);
-
-      fetch.mockJSONResponseOnce(
-        { name: 'Alan Turing' },
+      await httpCache.fetch(
+        adaUrl,
+        {},
         {
-          'Cache-Control': 'private, no-cache',
-          'Set-Cookie': 'foo',
+          cacheOptions: {
+            ttl: 30,
+          },
         },
       );
 
+      jest.advanceTimersByTime(30000);
+
+      mockGetAlanTuring({
+        'cache-control': 'private, no-cache',
+        'set-cookie': 'foo',
+      });
+
       const response = await httpCache.fetch(
-        new Request('https://api.example.com/people/1'),
+        'https://api.example.com/people/1',
       );
 
-      expect(fetch.mock.calls.length).toEqual(2);
-
       expect(await response.json()).toEqual({ name: 'Alan Turing' });
-      expect(response.headers.get('Age')).toEqual('0');
+      expect(response.headers.get('age')).toEqual('0');
     });
 
     it('fetches a fresh response from the origin when the overridden TTL expired even if a longer max-age has been specified', async () => {
-      fetch.mockJSONResponseOnce(
-        { name: 'Ada Lovelace' },
-        { 'Cache-Control': 'max-age=30' },
+      mockGetAdaLovelace({ 'cache-control': 'max-age=30' });
+
+      await httpCache.fetch(
+        adaUrl,
+        {},
+        {
+          cacheOptions: {
+            ttl: 10,
+          },
+        },
       );
 
-      await httpCache.fetch(new Request('https://api.example.com/people/1'), {
-        cacheOptions: {
-          ttl: 10,
-        },
+      jest.advanceTimersByTime(10000);
+
+      mockGetAlanTuring({
+        'cache-control': 'private, no-cache',
       });
 
-      clock.tick(10000);
-
-      fetch.mockJSONResponseOnce(
-        { name: 'Alan Turing' },
-        { 'Cache-Control': 'max-age=30' },
-      );
-
       const response = await httpCache.fetch(
-        new Request('https://api.example.com/people/1'),
+        'https://api.example.com/people/1',
       );
-
-      expect(fetch.mock.calls.length).toEqual(2);
 
       expect(await response.json()).toEqual({ name: 'Alan Turing' });
-      expect(response.headers.get('Age')).toEqual('0');
+      expect(response.headers.get('age')).toEqual('0');
     });
 
     it('does not store a response with an overridden TTL and a non-success status code', async () => {
-      fetch.mockResponseOnce(
-        'Internal server error',
-        { 'Cache-Control': 'max-age=30' },
-        500,
-      );
+      mockInternalServerError({ 'cache-control': 'max-age=30' });
 
-      await httpCache.fetch(new Request('https://api.example.com/people/1'), {
-        cacheOptions: {
-          ttl: 30,
+      await httpCache.fetch(
+        adaUrl,
+        {},
+        {
+          cacheOptions: {
+            ttl: 30,
+          },
         },
-      });
+      );
 
       expect(store.size).toEqual(0);
     });
 
     it('allows overriding the TTL dynamically', async () => {
-      fetch.mockJSONResponseOnce(
-        { name: 'Ada Lovelace' },
+      mockGetAdaLovelace({
+        'cache-control': 'private, no-cache',
+        'set-cookie': 'foo',
+      });
+
+      await httpCache.fetch(
+        adaUrl,
+        {},
         {
-          'Cache-Control': 'private, no-cache',
-          'Set-Cookie': 'foo',
+          cacheOptions: () => ({
+            ttl: 30,
+          }),
         },
       );
 
-      await httpCache.fetch(new Request('https://api.example.com/people/1'), {
-        cacheOptions: () => ({
-          ttl: 30,
-        }),
-      });
+      jest.advanceTimersByTime(10000);
 
-      clock.tick(10000);
+      const response = await httpCache.fetch(adaUrl);
 
-      const response = await httpCache.fetch(
-        new Request('https://api.example.com/people/1'),
-      );
-
-      expect(fetch.mock.calls.length).toEqual(1);
       expect(await response.json()).toEqual({ name: 'Ada Lovelace' });
-      expect(response.headers.get('Age')).toEqual('10');
+      expect(response.headers.get('age')).toEqual('10');
     });
 
     it('allows disabling caching when the TTL is 0 (falsy)', async () => {
-      fetch.mockJSONResponseOnce(
-        { name: 'Ada Lovelace' },
-        { 'Cache-Control': 'max-age=30' },
-      );
+      mockGetAdaLovelace({ 'cache-control': 'max-age=30' });
 
-      await httpCache.fetch(new Request('https://api.example.com/people/1'), {
-        cacheOptions: () => ({
-          ttl: 0,
-        }),
-      });
+      await httpCache.fetch(
+        adaUrl,
+        {},
+        {
+          cacheOptions: () => ({
+            ttl: 0,
+          }),
+        },
+      );
 
       expect(store.size).toEqual(0);
     });
   });
 
   it('allows specifying a custom cache key', async () => {
-    fetch.mockJSONResponseOnce(
-      { name: 'Ada Lovelace' },
-      { 'Cache-Control': 'max-age=30' },
-    );
+    nock(apiUrl)
+      .get(adaPath)
+      .query({ foo: '123' })
+      .reply(200, { name: 'Ada Lovelace' }, { 'cache-control': 'max-age=30' });
 
-    await httpCache.fetch(
-      new Request('https://api.example.com/people/1?foo=bar'),
-      { cacheKey: 'https://api.example.com/people/1' },
-    );
+    await httpCache.fetch(`${adaUrl}?foo=123`, {}, { cacheKey: adaUrl });
 
     const response = await httpCache.fetch(
-      new Request('https://api.example.com/people/1?foo=baz'),
-      { cacheKey: 'https://api.example.com/people/1' },
+      `${adaUrl}?foo=456`,
+      {},
+      { cacheKey: adaUrl },
     );
 
-    expect(fetch.mock.calls.length).toEqual(1);
     expect(await response.json()).toEqual({ name: 'Ada Lovelace' });
   });
 
   it('does not store a response to a non-GET request', async () => {
-    fetch.mockJSONResponseOnce(
-      { name: 'Ada Lovelace' },
-      { 'Cache-Control': 'max-age=30' },
-    );
+    nock(apiUrl)
+      .post(adaPath)
+      .reply(200, { name: 'Ada Lovelace' }, { 'cache-control': 'max-age=30' });
 
-    await httpCache.fetch(
-      new Request('https://api.example.com/people/1', { method: 'POST' }),
-    );
+    await httpCache.fetch(adaUrl, { method: 'POST' });
 
     expect(store.size).toEqual(0);
   });
 
   it('does not store a response with a non-success status code', async () => {
-    fetch.mockResponseOnce(
-      'Internal server error',
-      { 'Cache-Control': 'max-age=30' },
-      500,
-    );
+    mockInternalServerError({ 'cache-control': 'max-age=30' });
 
-    await httpCache.fetch(new Request('https://api.example.com/people/1'));
+    await httpCache.fetch(adaUrl);
 
     expect(store.size).toEqual(0);
   });
 
-  it('does not store a response without Cache-Control header', async () => {
-    fetch.mockJSONResponseOnce({ name: 'Ada Lovelace' });
+  it('does not store a response without cache-control header', async () => {
+    mockGetAdaLovelace();
 
-    await httpCache.fetch(new Request('https://api.example.com/people/1'));
+    await httpCache.fetch(adaUrl);
 
     expect(store.size).toEqual(0);
   });
 
   it('does not store a private response', async () => {
-    fetch.mockJSONResponseOnce(
-      { name: 'Ada Lovelace' },
-      { 'Cache-Control': 'private, max-age: 60' },
-    );
+    mockGetAdaLovelace({ 'cache-control': 'private, max-age: 60' });
 
-    await httpCache.fetch(new Request('https://api.example.com/me'));
+    await httpCache.fetch(adaUrl);
 
     expect(store.size).toEqual(0);
   });
 
-  it('returns a cached response when Vary header fields match', async () => {
-    fetch.mockJSONResponseOnce(
-      { name: 'Ada Lovelace' },
-      { 'Cache-Control': 'max-age=30', Vary: 'Accept-Language' },
-    );
+  it('returns a cached response when vary header fields match', async () => {
+    mockGetAdaLovelace({
+      'cache-control': 'max-age=30',
+      vary: 'Accept-Language',
+    });
 
-    await httpCache.fetch(
-      new Request('https://api.example.com/people/1', {
-        headers: { 'Accept-Language': 'en' },
-      }),
-    );
+    await httpCache.fetch(adaUrl, {
+      headers: { 'accept-language': 'en' },
+    });
 
-    const response = await httpCache.fetch(
-      new Request('https://api.example.com/people/1', {
-        headers: { 'Accept-Language': 'en' },
-      }),
-    );
+    const response = await httpCache.fetch(adaUrl, {
+      headers: { 'accept-language': 'en' },
+    });
 
-    expect(fetch.mock.calls.length).toEqual(1);
     expect(await response.json()).toEqual({ name: 'Ada Lovelace' });
   });
 
-  it(`does not return a cached response when Vary header fields don't match`, async () => {
-    fetch.mockJSONResponseOnce(
-      { name: 'Ada Lovelace' },
-      { 'Cache-Control': 'max-age=30', Vary: 'Accept-Language' },
-    );
+  it(`does not return a cached response when vary header fields don't match`, async () => {
+    mockGetAdaLovelace({
+      'cache-control': 'max-age=30',
+      vary: 'Accept-Language',
+    });
 
-    await httpCache.fetch(
-      new Request('https://api.example.com/people/1', {
-        headers: { 'Accept-Language': 'en' },
-      }),
-    );
+    await httpCache.fetch(adaUrl, {
+      headers: { 'accept-language': 'en' },
+    });
 
-    fetch.mockJSONResponseOnce(
-      { name: 'Alan Turing' },
-      { 'Cache-Control': 'max-age=30' },
-    );
+    mockGetAlanTuring({ 'cache-control': 'max-age=30' });
 
-    const response = await httpCache.fetch(
-      new Request('https://api.example.com/people/1', {
-        headers: { 'Accept-Language': 'fr' },
-      }),
-    );
+    const response = await httpCache.fetch('https://api.example.com/people/1', {
+      headers: { 'accept-language': 'fr' },
+    });
 
-    expect(fetch.mock.calls.length).toEqual(2);
     expect(await response.json()).toEqual({ name: 'Alan Turing' });
   });
 
   it('sets the TTL as max-age when the response does not contain revalidation headers', async () => {
-    fetch.mockJSONResponseOnce(
-      { name: 'Ada Lovelace' },
-      { 'Cache-Control': 'max-age=30' },
-    );
+    mockGetAdaLovelace({ 'cache-control': 'max-age=30' });
 
     const storeSet = jest.spyOn(store, 'set');
 
-    await httpCache.fetch(new Request('https://api.example.com/people/1'));
+    await httpCache.fetch(adaUrl);
 
     expect(storeSet).toHaveBeenCalledWith(
       expect.any(String),
@@ -361,14 +333,11 @@ describe('HTTPCache', () => {
   });
 
   it('sets the TTL as 2 * max-age when the response contains an ETag header', async () => {
-    fetch.mockJSONResponseOnce(
-      { name: 'Ada Lovelace' },
-      { 'Cache-Control': 'max-age=30', ETag: 'foo' },
-    );
+    mockGetAdaLovelace({ 'cache-control': 'max-age=30', etag: 'foo' });
 
     const storeSet = jest.spyOn(store, 'set');
 
-    await httpCache.fetch(new Request('https://api.example.com/people/1'));
+    await httpCache.fetch(adaUrl);
 
     expect(storeSet).toHaveBeenCalledWith(
       expect.any(String),
@@ -380,110 +349,75 @@ describe('HTTPCache', () => {
   });
 
   it('revalidates a cached response when expired and returns the cached response when not modified', async () => {
-    fetch.mockJSONResponseOnce(
-      { name: 'Ada Lovelace' },
-      {
-        'Cache-Control': 'public, max-age=30',
-        ETag: 'foo',
-      },
-    );
+    mockGetAdaLovelace({
+      'cache-control': 'public, max-age=30',
+      etag: 'foo',
+    });
 
-    await httpCache.fetch(new Request('https://api.example.com/people/1'));
+    await httpCache.fetch(adaUrl);
 
-    clock.tick(30000);
+    jest.advanceTimersByTime(30000);
 
-    fetch.mockResponseOnce(
-      null,
-      {
-        'Cache-Control': 'public, max-age=30',
-        ETag: 'foo',
-      },
-      304,
-    );
+    nock(apiUrl)
+      .get(adaPath)
+      .matchHeader('if-none-match', 'foo')
+      .reply(304, undefined, {
+        'cache-control': 'public, max-age=30',
+        etag: 'foo',
+      });
 
-    const response = await httpCache.fetch(
-      new Request('https://api.example.com/people/1'),
-    );
-
-    expect(fetch.mock.calls.length).toEqual(2);
-    expect(
-      (fetch.mock.calls[1][0] as Request).headers.get('If-None-Match'),
-    ).toEqual('foo');
+    const response = await httpCache.fetch(adaUrl);
 
     expect(response.status).toEqual(200);
     expect(await response.json()).toEqual({ name: 'Ada Lovelace' });
-    expect(response.headers.get('Age')).toEqual('0');
+    expect(response.headers.get('age')).toEqual('0');
 
-    clock.tick(10000);
+    jest.advanceTimersByTime(10000);
 
-    const response2 = await httpCache.fetch(
-      new Request('https://api.example.com/people/1'),
-    );
-
-    expect(fetch.mock.calls.length).toEqual(2);
+    const response2 = await httpCache.fetch(adaUrl);
 
     expect(response2.status).toEqual(200);
     expect(await response2.json()).toEqual({ name: 'Ada Lovelace' });
-    expect(response2.headers.get('Age')).toEqual('10');
+    expect(response2.headers.get('age')).toEqual('10');
   });
 
   it('revalidates a cached response when expired and returns and caches a fresh response when modified', async () => {
-    fetch.mockJSONResponseOnce(
-      { name: 'Ada Lovelace' },
-      {
-        'Cache-Control': 'public, max-age=30',
-        ETag: 'foo',
-      },
-    );
+    mockGetAdaLovelace({
+      'cache-control': 'public, max-age=30',
+      etag: 'foo',
+    });
 
-    await httpCache.fetch(new Request('https://api.example.com/people/1'));
+    await httpCache.fetch(adaUrl);
 
-    clock.tick(30000);
+    jest.advanceTimersByTime(30000);
 
-    fetch.mockJSONResponseOnce(
-      { name: 'Alan Turing' },
-      {
-        'Cache-Control': 'public, max-age=30',
-        ETag: 'bar',
-      },
-    );
+    mockGetAlanTuring({
+      'cache-control': 'public, max-age=30',
+      etag: 'bar',
+    });
 
-    const response = await httpCache.fetch(
-      new Request('https://api.example.com/people/1'),
-    );
-
-    expect(fetch.mock.calls.length).toEqual(2);
-    expect(
-      (fetch.mock.calls[1][0] as Request).headers.get('If-None-Match'),
-    ).toEqual('foo');
+    const response = await httpCache.fetch('https://api.example.com/people/1');
 
     expect(response.status).toEqual(200);
     expect(await response.json()).toEqual({ name: 'Alan Turing' });
 
-    clock.tick(10000);
+    jest.advanceTimersByTime(10000);
 
-    const response2 = await httpCache.fetch(
-      new Request('https://api.example.com/people/1'),
-    );
-
-    expect(fetch.mock.calls.length).toEqual(2);
+    const response2 = await httpCache.fetch('https://api.example.com/people/1');
 
     expect(response2.status).toEqual(200);
     expect(await response2.json()).toEqual({ name: 'Alan Turing' });
-    expect(response2.headers.get('Age')).toEqual('10');
+    expect(response2.headers.get('age')).toEqual('10');
   });
 
   it('fetches a response from the origin with a custom fetch function', async () => {
-    fetch.mockJSONResponseOnce({ name: 'Ada Lovelace' });
+    mockGetAdaLovelace();
 
     const customFetch = jest.fn(fetch);
     const customHttpCache = new HTTPCache(store as any, customFetch);
 
-    const response = await customHttpCache.fetch(
-      new Request('https://api.example.com/people/1'),
-    );
+    const response = await customHttpCache.fetch(adaUrl);
 
-    expect(customFetch.mock.calls.length).toEqual(1);
     expect(await response.json()).toEqual({ name: 'Ada Lovelace' });
   });
 });

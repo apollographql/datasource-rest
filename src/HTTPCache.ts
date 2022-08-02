@@ -1,21 +1,24 @@
-import { fetch, Request, Response, Headers } from 'apollo-server-env';
-
-import CachePolicy = require('http-cache-semantics');
-
+import fetch, { Response } from 'node-fetch';
+import CachePolicy from 'http-cache-semantics';
+import type {
+  Fetcher,
+  FetcherResponse,
+  FetcherRequestInit,
+} from '@apollo/utils.fetcher';
 import {
-  KeyValueCache,
   InMemoryLRUCache,
+  KeyValueCache,
   PrefixingKeyValueCache,
 } from '@apollo/utils.keyvaluecache';
-import type { CacheOptions } from './RESTDataSource';
+import type { CacheOptions, RequestOptions } from './RESTDataSource';
 
 export class HTTPCache {
   private keyValueCache: KeyValueCache;
-  private httpFetch: typeof fetch;
+  private httpFetch: Fetcher;
 
   constructor(
     keyValueCache: KeyValueCache = new InMemoryLRUCache(),
-    httpFetch: typeof fetch = fetch,
+    httpFetch: Fetcher = fetch,
   ) {
     this.keyValueCache = new PrefixingKeyValueCache(
       keyValueCache,
@@ -25,31 +28,38 @@ export class HTTPCache {
   }
 
   async fetch(
-    request: Request,
-    options: {
+    url: string,
+    requestOpts: FetcherRequestInit = {},
+    cache?: {
       cacheKey?: string;
       cacheOptions?:
         | CacheOptions
-        | ((response: Response, request: Request) => CacheOptions | undefined);
-    } = {},
-  ): Promise<Response> {
-    const cacheKey = options.cacheKey ? options.cacheKey : request.url;
+        | ((
+            url: string,
+            response: FetcherResponse,
+            request: RequestOptions,
+          ) => CacheOptions | undefined);
+    },
+  ): Promise<FetcherResponse> {
+    requestOpts.method = requestOpts.method ?? 'GET';
+    const cacheKey = cache?.cacheKey ? cache.cacheKey : url;
 
     const entry = await this.keyValueCache.get(cacheKey);
     if (!entry) {
-      const response = await this.httpFetch(request);
+      const response = await this.httpFetch(url, requestOpts);
 
       const policy = new CachePolicy(
-        policyRequestFrom(request),
+        policyRequestFrom(url, requestOpts),
         policyResponseFrom(response),
       );
 
       return this.storeResponseAndReturnClone(
+        url,
         response,
-        request,
+        requestOpts,
         policy,
         cacheKey,
-        options.cacheOptions,
+        cache?.cacheOptions,
       );
     }
 
@@ -62,7 +72,9 @@ export class HTTPCache {
     if (
       (ttlOverride && policy.age() < ttlOverride) ||
       (!ttlOverride &&
-        policy.satisfiesWithoutRevalidation(policyRequestFrom(request)))
+        policy.satisfiesWithoutRevalidation(
+          policyRequestFrom(url, requestOpts),
+        ))
     ) {
       const headers = policy.responseHeaders();
       return new Response(body, {
@@ -72,43 +84,53 @@ export class HTTPCache {
       });
     } else {
       const revalidationHeaders = policy.revalidationHeaders(
-        policyRequestFrom(request),
+        policyRequestFrom(url, requestOpts),
       );
-      const revalidationRequest = new Request(request, {
+      const revalidationRequest: RequestOptions = {
+        ...requestOpts,
         headers: revalidationHeaders,
-      });
-      const revalidationResponse = await this.httpFetch(revalidationRequest);
+      };
+      const revalidationResponse = await this.httpFetch(
+        url,
+        revalidationRequest,
+      );
 
       const { policy: revalidatedPolicy, modified } = policy.revalidatedPolicy(
-        policyRequestFrom(revalidationRequest),
+        policyRequestFrom(url, revalidationRequest),
         policyResponseFrom(revalidationResponse),
       );
 
       return this.storeResponseAndReturnClone(
+        url,
         new Response(modified ? await revalidationResponse.text() : body, {
           url: revalidatedPolicy._url,
           status: revalidatedPolicy._status,
           headers: revalidatedPolicy.responseHeaders(),
         }),
-        request,
+        requestOpts,
         revalidatedPolicy,
         cacheKey,
-        options.cacheOptions,
+        cache?.cacheOptions,
       );
     }
   }
 
   private async storeResponseAndReturnClone(
-    response: Response,
-    request: Request,
+    url: string,
+    response: FetcherResponse,
+    request: RequestOptions,
     policy: CachePolicy,
     cacheKey: string,
     cacheOptions?:
       | CacheOptions
-      | ((response: Response, request: Request) => CacheOptions | undefined),
-  ): Promise<Response> {
+      | ((
+          url: string,
+          response: FetcherResponse,
+          request: RequestOptions,
+        ) => CacheOptions | undefined),
+  ): Promise<FetcherResponse> {
     if (typeof cacheOptions === 'function') {
-      cacheOptions = cacheOptions(response, request);
+      cacheOptions = cacheOptions(url, response, request);
     }
 
     let ttlOverride = cacheOptions?.ttl;
@@ -153,34 +175,26 @@ export class HTTPCache {
       url: response.url,
       status: response.status,
       statusText: response.statusText,
-      headers: response.headers,
+      headers: Object.fromEntries(response.headers),
     });
   }
 }
 
-function canBeRevalidated(response: Response): boolean {
+function canBeRevalidated(response: FetcherResponse): boolean {
   return response.headers.has('ETag');
 }
 
-function policyRequestFrom(request: Request) {
+function policyRequestFrom(url: string, request: RequestOptions) {
   return {
-    url: request.url,
-    method: request.method,
-    headers: headersToObject(request.headers),
+    url,
+    method: request.method ?? 'GET',
+    headers: request.headers ?? {},
   };
 }
 
-function policyResponseFrom(response: Response) {
+function policyResponseFrom(response: FetcherResponse) {
   return {
     status: response.status,
-    headers: headersToObject(response.headers),
+    headers: Object.fromEntries(response.headers),
   };
-}
-
-function headersToObject(headers: Headers) {
-  const object = Object.create(null);
-  for (const [name, value] of headers) {
-    object[name] = value;
-  }
-  return object;
 }

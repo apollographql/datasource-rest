@@ -1,62 +1,56 @@
-import {
-  Request,
-  RequestInit,
-  Response,
-  BodyInit,
-  Headers,
-  URL,
-  URLSearchParams,
-  URLSearchParamsInit,
-  fetch,
-} from 'apollo-server-env';
-
-import { DataSource, DataSourceConfig } from 'apollo-datasource';
-
 import { HTTPCache } from './HTTPCache';
-
-import {
-  ApolloError,
-  AuthenticationError,
-  ForbiddenError,
-} from 'apollo-server-errors';
+import { GraphQLError } from 'graphql';
+import type { KeyValueCache } from '@apollo/utils.keyvaluecache';
+import type {
+  Fetcher,
+  FetcherRequestInit,
+  FetcherResponse,
+} from '@apollo/utils.fetcher';
 
 type ValueOrPromise<T> = T | Promise<T>;
-declare module 'apollo-server-env/dist/fetch' {
-  interface RequestInit {
-    cacheOptions?:
-      | CacheOptions
-      | ((response: Response, request: Request) => CacheOptions | undefined);
-  }
+
+type URLSearchParamsInit = ConstructorParameters<typeof URLSearchParams>[0];
+
+export type RequestOptions = FetcherRequestInit & {
+  params?: URLSearchParamsInit;
+  cacheOptions?:
+    | CacheOptions
+    | ((
+        url: string,
+        response: FetcherResponse,
+        request: RequestOptions,
+      ) => CacheOptions | undefined);
+};
+
+export interface GetRequest extends RequestOptions {
+  method?: 'GET';
+  body?: never;
 }
 
-export type RequestOptions = RequestInit & {
-  path: string;
-  params: URLSearchParams;
-  headers: Headers;
-  body?: Body;
-};
+export interface RequestWithBody extends Omit<RequestOptions, 'body'> {
+  method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  body?: FetcherRequestInit['body'] | object;
+}
+
+type DataSourceRequest = GetRequest | RequestWithBody;
 
 export interface CacheOptions {
   ttl?: number;
 }
 
-export type Body = BodyInit | object;
-export { Request };
-
 const NODE_ENV = process.env.NODE_ENV;
 
-export abstract class RESTDataSource<TContext = any> extends DataSource {
-  httpCache!: HTTPCache;
-  context!: TContext;
+export interface DataSourceConfig {
+  cache?: KeyValueCache;
+  fetch?: Fetcher;
+}
+
+export abstract class RESTDataSource {
+  httpCache: HTTPCache;
   memoizedResults = new Map<string, Promise<any>>();
 
-  constructor(private httpFetch?: typeof fetch) {
-    super();
-  }
-
-  override initialize(config: DataSourceConfig<TContext>): void {
-    this.context = config.context;
-    this.httpCache = new HTTPCache(config.cache, this.httpFetch);
+  constructor(config?: DataSourceConfig) {
+    this.httpCache = new HTTPCache(config?.cache, config?.fetch);
   }
 
   baseURL?: string;
@@ -66,14 +60,17 @@ export abstract class RESTDataSource<TContext = any> extends DataSource {
   // For example, you could use this to take Vary header fields into account.
   // Although we do validate header fields and don't serve responses from cache when they don't match,
   // new responses overwrite old ones with different vary header fields.
-  protected cacheKeyFor(request: Request): string {
-    return request.url;
+  protected cacheKeyFor(url: URL, _request: RequestOptions): string {
+    return url.toString();
   }
 
-  protected willSendRequest?(request: RequestOptions): ValueOrPromise<void>;
+  protected willSendRequest?(
+    requestOpts: Omit<RequestOptions, 'body'> & {
+      body?: RequestOptions['body'] | object;
+    },
+  ): ValueOrPromise<void>;
 
-  protected resolveURL(request: RequestOptions): ValueOrPromise<URL> {
-    let path = request.path;
+  protected resolveURL(path: string): ValueOrPromise<URL> {
     if (path.startsWith('/')) {
       path = path.slice(1);
     }
@@ -89,13 +86,14 @@ export abstract class RESTDataSource<TContext = any> extends DataSource {
   }
 
   protected cacheOptionsFor?(
-    response: Response,
-    request: Request,
+    url: string,
+    response: FetcherResponse,
+    request: FetcherRequestInit,
   ): CacheOptions | undefined;
 
   protected async didReceiveResponse<TResult = any>(
-    response: Response,
-    _request: Request,
+    response: FetcherResponse,
+    _request: RequestOptions,
   ): Promise<TResult> {
     if (response.ok) {
       return this.parseBody(response) as any as Promise<TResult>;
@@ -104,11 +102,11 @@ export abstract class RESTDataSource<TContext = any> extends DataSource {
     }
   }
 
-  protected didEncounterError(error: Error, _request: Request) {
+  protected didEncounterError(error: Error, _request: RequestOptions) {
     throw error;
   }
 
-  protected parseBody(response: Response): Promise<object | string> {
+  protected parseBody(response: FetcherResponse): Promise<object | string> {
     const contentType = response.headers.get('Content-Type');
     const contentLength = response.headers.get('Content-Length');
     if (
@@ -126,16 +124,16 @@ export abstract class RESTDataSource<TContext = any> extends DataSource {
     }
   }
 
-  protected async errorFromResponse(response: Response) {
+  protected async errorFromResponse(response: FetcherResponse) {
     const message = `${response.status}: ${response.statusText}`;
 
-    let error: ApolloError;
+    let error: GraphQLError;
     if (response.status === 401) {
       error = new AuthenticationError(message);
     } else if (response.status === 403) {
       error = new ForbiddenError(message);
     } else {
-      error = new ApolloError(message);
+      error = new GraphQLError(message);
     }
 
     const body = await this.parseBody(response);
@@ -154,119 +152,107 @@ export abstract class RESTDataSource<TContext = any> extends DataSource {
 
   protected async get<TResult = any>(
     path: string,
-    params?: URLSearchParamsInit,
-    init?: RequestInit,
+    request?: GetRequest,
   ): Promise<TResult> {
-    return this.fetch<TResult>(
-      Object.assign({ method: 'GET', path, params }, init),
-    );
+    return this.fetch<TResult>(path, { method: 'GET', ...request });
   }
 
   protected async post<TResult = any>(
     path: string,
-    body?: Body,
-    init?: RequestInit,
+    request?: RequestWithBody,
   ): Promise<TResult> {
-    return this.fetch<TResult>(
-      Object.assign({ method: 'POST', path, body }, init),
-    );
+    return this.fetch<TResult>(path, { method: 'POST', ...request });
   }
 
   protected async patch<TResult = any>(
     path: string,
-    body?: Body,
-    init?: RequestInit,
+    request?: RequestWithBody,
   ): Promise<TResult> {
-    return this.fetch<TResult>(
-      Object.assign({ method: 'PATCH', path, body }, init),
-    );
+    return this.fetch<TResult>(path, { method: 'PATCH', ...request });
   }
 
   protected async put<TResult = any>(
     path: string,
-    body?: Body,
-    init?: RequestInit,
+    request?: RequestWithBody,
   ): Promise<TResult> {
-    return this.fetch<TResult>(
-      Object.assign({ method: 'PUT', path, body }, init),
-    );
+    return this.fetch<TResult>(path, { method: 'PUT', ...request });
   }
 
   protected async delete<TResult = any>(
     path: string,
-    params?: URLSearchParamsInit,
-    init?: RequestInit,
+    request?: RequestWithBody,
   ): Promise<TResult> {
-    return this.fetch<TResult>(
-      Object.assign({ method: 'DELETE', path, params }, init),
-    );
+    return this.fetch<TResult>(path, { method: 'DELETE', ...request });
   }
 
   private async fetch<TResult>(
-    init: RequestInit & {
-      path: string;
-      params?: URLSearchParamsInit;
-    },
+    path: string,
+    request: DataSourceRequest,
   ): Promise<TResult> {
-    if (!(init.params instanceof URLSearchParams)) {
-      init.params = new URLSearchParams(init.params);
+    const modifiedRequest: RequestOptions = {
+      ...request,
+      body: undefined,
+    };
+    if (!(modifiedRequest.params instanceof URLSearchParams)) {
+      modifiedRequest.params = new URLSearchParams(modifiedRequest.params);
     }
 
-    if (!(init.headers instanceof Headers)) {
-      init.headers = new Headers(init.headers || Object.create(null));
-    }
-
-    const options = init as RequestOptions;
+    modifiedRequest.headers = modifiedRequest.headers ?? Object.create(null);
 
     if (this.willSendRequest) {
-      await this.willSendRequest(options);
+      await this.willSendRequest(modifiedRequest);
     }
 
-    const url = await this.resolveURL(options);
+    const url = await this.resolveURL(path);
 
     // Append params to existing params in the path
-    for (const [name, value] of options.params) {
+    for (const [name, value] of modifiedRequest.params) {
       url.searchParams.append(name, value);
     }
 
     // We accept arbitrary objects and arrays as body and serialize them as JSON
     if (
-      options.body !== undefined &&
-      options.body !== null &&
-      (options.body.constructor === Object ||
-        Array.isArray(options.body) ||
-        ((options.body as any).toJSON &&
-          typeof (options.body as any).toJSON === 'function'))
+      request.body !== undefined &&
+      request.body !== null &&
+      (request.body.constructor === Object ||
+        Array.isArray(request.body) ||
+        ((request.body as any).toJSON &&
+          typeof (request.body as any).toJSON === 'function'))
     ) {
-      options.body = JSON.stringify(options.body);
+      modifiedRequest.body = JSON.stringify(request.body);
       // If Content-Type header has not been previously set, set to application/json
-      if (!options.headers.get('Content-Type')) {
-        options.headers.set('Content-Type', 'application/json');
+      if (!modifiedRequest.headers) {
+        modifiedRequest.headers = { 'content-type': 'application/json' };
+      } else if (!modifiedRequest.headers['content-type']) {
+        modifiedRequest.headers['content-type'] = 'application/json';
       }
     }
 
-    const request = new Request(String(url), options);
-
-    const cacheKey = this.cacheKeyFor(request);
+    const cacheKey = this.cacheKeyFor(url, modifiedRequest);
 
     const performRequest = async () => {
-      return this.trace(request, async () => {
-        const cacheOptions = options.cacheOptions
-          ? options.cacheOptions
+      const urlString = url.toString();
+      return this.trace(urlString, modifiedRequest, async () => {
+        const cacheOptions = modifiedRequest.cacheOptions
+          ? modifiedRequest.cacheOptions
           : this.cacheOptionsFor?.bind(this);
         try {
-          const response = await this.httpCache.fetch(request, {
-            cacheKey,
-            cacheOptions,
-          });
-          return await this.didReceiveResponse(response, request);
+          const response = await this.httpCache.fetch(
+            urlString,
+            modifiedRequest,
+            {
+              cacheKey,
+              cacheOptions,
+            },
+          );
+          return await this.didReceiveResponse(response, modifiedRequest);
         } catch (error) {
-          this.didEncounterError(error as Error, request);
+          this.didEncounterError(error as Error, modifiedRequest);
         }
       });
     };
 
-    if (request.method === 'GET') {
+    if (modifiedRequest.method === 'GET') {
       let promise = this.memoizedResults.get(cacheKey);
       if (promise) return promise;
 
@@ -280,7 +266,8 @@ export abstract class RESTDataSource<TContext = any> extends DataSource {
   }
 
   protected async trace<TResult>(
-    request: Request,
+    url: string,
+    request: RequestOptions,
     fn: () => Promise<TResult>,
   ): Promise<TResult> {
     if (NODE_ENV === 'development') {
@@ -290,11 +277,25 @@ export abstract class RESTDataSource<TContext = any> extends DataSource {
         return await fn();
       } finally {
         const duration = Date.now() - startTime;
-        const label = `${request.method || 'GET'} ${request.url}`;
+        const label = `${request.method || 'GET'} ${url}`;
         console.log(`${label} (${duration}ms)`);
       }
     } else {
       return fn();
     }
+  }
+}
+
+export class AuthenticationError extends GraphQLError {
+  constructor(message: string) {
+    super(message, { extensions: { code: 'UNAUTHENTICATED' } });
+    this.name = 'AuthenticationError';
+  }
+}
+
+export class ForbiddenError extends GraphQLError {
+  constructor(message: string) {
+    super(message, { extensions: { code: 'FORBIDDEN' } });
+    this.name = 'ForbiddenError';
   }
 }
