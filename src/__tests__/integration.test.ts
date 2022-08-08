@@ -13,12 +13,11 @@ const typeDefs = `#graphql
 
 describe('Works with ApolloServer', () => {
   it('DataSources can be passed via `executeOperation` context argument and used in a resolver ', async () => {
-
     let fooPosted = false;
     class FooDS extends RESTDataSource {
       override baseURL = 'https://api.example.com';
 
-      postFoo(foo: {id: number}) {
+      postFoo(foo: { id: number }) {
         fooPosted = true;
         return foo.id;
       }
@@ -27,7 +26,7 @@ describe('Works with ApolloServer', () => {
     interface MyContext {
       dataSources: {
         foo: FooDS;
-      }
+      };
     }
 
     const server = new ApolloServer<MyContext>({
@@ -38,14 +37,14 @@ describe('Works with ApolloServer', () => {
             return context.dataSources.foo.postFoo({ id: 1 });
           },
         },
-      }
+      },
     });
     await server.start();
 
     const context: MyContext = {
       dataSources: {
         foo: new FooDS(),
-      }
+      },
     };
 
     const res = await server.executeOperation(
