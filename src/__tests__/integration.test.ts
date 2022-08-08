@@ -1,107 +1,63 @@
-import { ApolloServerBase } from '../ApolloServer';
-import gql from 'graphql-tag';
+import { ApolloServer } from '@apollo/server';
+import { RESTDataSource } from '../RESTDataSource';
 
-const typeDefs = gql`
+const typeDefs = `#graphql
   type Query {
-    hello: String
+    foo: String
+  }
+
+  type Mutation {
+    createFoo: Int!
   }
 `;
 
-describe('ApolloServerBase dataSources', () => {
-  it('initializes synchronous datasources from a datasource creator function', async () => {
-    const initialize = jest.fn();
+describe('Works with ApolloServer', () => {
+  it('DataSources can be passed via `executeOperation` context argument and used in a resolver ', async () => {
 
-    const server = new ApolloServerBase({
+    let fooPosted = false;
+    class FooDS extends RESTDataSource {
+      override baseURL = 'https://api.example.com';
+
+      postFoo(foo: {id: number}) {
+        fooPosted = true;
+        return foo.id;
+      }
+    }
+
+    interface MyContext {
+      dataSources: {
+        foo: FooDS;
+      }
+    }
+
+    const server = new ApolloServer<MyContext>({
       typeDefs,
       resolvers: {
-        Query: {
-          hello() {
-            return 'world';
+        Mutation: {
+          createFoo(_, __, context) {
+            return context.dataSources.foo.postFoo({ id: 1 });
           },
         },
-      },
-      dataSources: () => ({ x: { initialize }, y: { initialize } }),
+      }
     });
     await server.start();
 
-    await server.executeOperation({ query: 'query { hello }' });
+    const context: MyContext = {
+      dataSources: {
+        foo: new FooDS(),
+      }
+    };
 
-    expect(initialize).toHaveBeenCalledTimes(2);
-  });
-
-  it('initializes all async and sync datasources before calling resolvers', async () => {
-    const INITIALIZE = 'datasource initializer call';
-    const METHOD_CALL = 'datasource method call';
-
-    const expectedCallOrder = [INITIALIZE, INITIALIZE, INITIALIZE, METHOD_CALL];
-
-    const actualCallOrder: string[] = [];
-
-    const server = new ApolloServerBase({
-      typeDefs,
-      resolvers: {
-        Query: {
-          hello(_, __, context) {
-            context.dataSources.x.getData();
-            return 'world';
-          },
-        },
+    const res = await server.executeOperation(
+      {
+        query: `#graphql
+          mutation { createFoo }
+        `,
       },
-      dataSources: () => ({
-        x: {
-          initialize() {
-            return Promise.resolve().then(() => {
-              actualCallOrder.push(INITIALIZE);
-            });
-          },
-          getData() {
-            actualCallOrder.push(METHOD_CALL);
-          },
-        },
-        y: {
-          initialize() {
-            return new Promise((res) => {
-              setTimeout(() => {
-                actualCallOrder.push(INITIALIZE);
-                res();
-              }, 0);
-            });
-          },
-        },
-        z: {
-          initialize() {
-            actualCallOrder.push(INITIALIZE);
-          },
-        },
-      }),
-    });
-    await server.start();
+      context,
+    );
 
-    await server.executeOperation({ query: 'query { hello }' });
-
-    expect(actualCallOrder).toEqual(expectedCallOrder);
-  });
-
-  it('makes datasources available on resolver contexts', async () => {
-    const message = 'hi from dataSource';
-    const getData = jest.fn(() => message);
-
-    const server = new ApolloServerBase({
-      typeDefs,
-      resolvers: {
-        Query: {
-          hello(_, __, context) {
-            return context.dataSources.x.getData();
-          },
-        },
-      },
-      dataSources: () => ({ x: { initialize() {}, getData } }),
-    });
-    await server.start();
-
-    const res = await server.executeOperation({ query: 'query { hello }' });
-
-    expect(getData).toHaveBeenCalled();
-    expect(res.data?.hello).toBe(message);
+    expect(fooPosted).toBe(true);
+    expect(res.result.data?.createFoo).toBe(1);
   });
 });
