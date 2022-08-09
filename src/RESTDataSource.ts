@@ -65,9 +65,7 @@ export abstract class RESTDataSource {
   }
 
   protected willSendRequest?(
-    requestOpts: Omit<RequestOptions, 'body'> & {
-      body?: RequestOptions['body'] | object;
-    },
+    requestOpts: RequestOptions,
   ): ValueOrPromise<void>;
 
   protected resolveURL(path: string): ValueOrPromise<URL> {
