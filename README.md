@@ -98,9 +98,7 @@ You can easily set a header on every request:
 ```javascript
 class PersonalizationAPI extends RESTDataSource {
   willSendRequest(request) {
-    request.headers = {
-      authorization: this.context.token,
-    };
+    request.headers['authorization'] = this.context.token;
   }
 }
 ```
@@ -117,7 +115,7 @@ class PersonalizationAPI extends RESTDataSource {
 
 If you're using TypeScript, you can use the `RequestOptions` type to define the `willSendRequest` signature:
 ```ts
-import { RESTDataSource, RequestOptions } from '@apollo/datasource-rest';
+import { RESTDataSource, WillSendRequestOptions } from '@apollo/datasource-rest';
 
 class PersonalizationAPI extends RESTDataSource {
   override baseURL = 'https://personalization-api.example.com/';
@@ -126,11 +124,8 @@ class PersonalizationAPI extends RESTDataSource {
     super();
   }
 
-  override willSendRequest(request: RequestOptions) {
-    request.headers = {
-      ...request.headers,
-      authorization: this.token,
-    };
+  override willSendRequest(request: WillSendRequestOptions) {
+    request.headers['authorization'] = this.token;
   }
 }
 ```

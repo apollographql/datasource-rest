@@ -1,2 +1,5 @@
-export { RESTDataSource, RequestOptions } from './RESTDataSource';
-export { HTTPCache } from './HTTPCache';
+export {
+  RESTDataSource,
+  RequestOptions,
+  WillSendRequestOptions,
+} from './RESTDataSource';
