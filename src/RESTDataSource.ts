@@ -9,6 +9,7 @@ import type {
 
 type ValueOrPromise<T> = T | Promise<T>;
 
+// URLSearchParams is globally available in Node / coming from @types/node
 type URLSearchParamsInit = ConstructorParameters<typeof URLSearchParams>[0];
 
 export type RequestOptions = FetcherRequestInit & {
