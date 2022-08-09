@@ -214,7 +214,7 @@ export abstract class RESTDataSource {
       await this.willSendRequest(modifiedRequest);
     }
 
-    const url = await this.resolveURL(path, request);
+    const url = await this.resolveURL(path, modifiedRequest);
 
     // Append params to existing params in the path
     for (const [name, value] of modifiedRequest.params as URLSearchParams) {

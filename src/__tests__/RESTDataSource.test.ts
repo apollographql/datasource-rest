@@ -71,11 +71,11 @@ describe('RESTDataSource', () => {
 
     it('allows resolving a base URL asynchronously', async () => {
       const dataSource = new (class extends RESTDataSource {
-        override async resolveURL(path: string) {
+        override async resolveURL(path: string, request: RequestOptions) {
           if (!this.baseURL) {
             this.baseURL = 'https://api.example.com';
           }
-          return super.resolveURL(path);
+          return super.resolveURL(path, request);
         }
 
         getFoo() {
