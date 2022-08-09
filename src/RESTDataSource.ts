@@ -77,7 +77,10 @@ export abstract class RESTDataSource {
     requestOpts: WillSendRequestOptions,
   ): ValueOrPromise<void>;
 
-  protected resolveURL(path: string): ValueOrPromise<URL> {
+  protected resolveURL(
+    path: string,
+    _request: RequestOptions,
+  ): ValueOrPromise<URL> {
     if (path.startsWith('/')) {
       path = path.slice(1);
     }
@@ -196,23 +199,22 @@ export abstract class RESTDataSource {
     path: string,
     request: DataSourceRequest,
   ): Promise<TResult> {
-    const modifiedRequest: WillSendRequestOptions =
-      {
-        ...request,
-        // guarantee params and headers objects before calling `willSendRequest` for convenience
-        params:
-          request.params instanceof URLSearchParams
-            ? request.params
-            : new URLSearchParams(request.params),
-        headers: request.headers ?? Object.create(null),
-        body: undefined,
-      };
+    const modifiedRequest: WillSendRequestOptions = {
+      ...request,
+      // guarantee params and headers objects before calling `willSendRequest` for convenience
+      params:
+        request.params instanceof URLSearchParams
+          ? request.params
+          : new URLSearchParams(request.params),
+      headers: request.headers ?? Object.create(null),
+      body: undefined,
+    };
 
     if (this.willSendRequest) {
       await this.willSendRequest(modifiedRequest);
     }
 
-    const url = await this.resolveURL(path);
+    const url = await this.resolveURL(path, request);
 
     // Append params to existing params in the path
     for (const [name, value] of modifiedRequest.params as URLSearchParams) {
