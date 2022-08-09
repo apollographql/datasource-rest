@@ -716,7 +716,7 @@ describe('RESTDataSource', () => {
 
         expect(traceSpy).toBeCalledTimes(1);
         expect(traceSpy).toBeCalledWith(
-          'https://api.example.com/foo',
+          expect.any(URL),
           expect.any(Object),
           expect.any(Function),
         );

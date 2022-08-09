@@ -28,7 +28,7 @@ export class HTTPCache {
   }
 
   async fetch(
-    url: string,
+    url: URL,
     requestOpts: FetcherRequestInit = {},
     cache?: {
       cacheKey?: string;
@@ -41,20 +41,21 @@ export class HTTPCache {
           ) => CacheOptions | undefined);
     },
   ): Promise<FetcherResponse> {
+    const urlString = url.toString();
     requestOpts.method = requestOpts.method ?? 'GET';
-    const cacheKey = cache?.cacheKey ? cache.cacheKey : url;
+    const cacheKey = cache?.cacheKey ?? urlString;
 
     const entry = await this.keyValueCache.get(cacheKey);
     if (!entry) {
-      const response = await this.httpFetch(url, requestOpts);
+      const response = await this.httpFetch(urlString, requestOpts);
 
       const policy = new CachePolicy(
-        policyRequestFrom(url, requestOpts),
+        policyRequestFrom(urlString, requestOpts),
         policyResponseFrom(response),
       );
 
       return this.storeResponseAndReturnClone(
-        url,
+        urlString,
         response,
         requestOpts,
         policy,
@@ -73,7 +74,7 @@ export class HTTPCache {
       (ttlOverride && policy.age() < ttlOverride) ||
       (!ttlOverride &&
         policy.satisfiesWithoutRevalidation(
-          policyRequestFrom(url, requestOpts),
+          policyRequestFrom(urlString, requestOpts),
         ))
     ) {
       const headers = policy.responseHeaders();
@@ -84,24 +85,24 @@ export class HTTPCache {
       });
     } else {
       const revalidationHeaders = policy.revalidationHeaders(
-        policyRequestFrom(url, requestOpts),
+        policyRequestFrom(urlString, requestOpts),
       );
       const revalidationRequest: RequestOptions = {
         ...requestOpts,
         headers: revalidationHeaders,
       };
       const revalidationResponse = await this.httpFetch(
-        url,
+        urlString,
         revalidationRequest,
       );
 
       const { policy: revalidatedPolicy, modified } = policy.revalidatedPolicy(
-        policyRequestFrom(url, revalidationRequest),
+        policyRequestFrom(urlString, revalidationRequest),
         policyResponseFrom(revalidationResponse),
       );
 
       return this.storeResponseAndReturnClone(
-        url,
+        urlString,
         new Response(modified ? await revalidationResponse.text() : body, {
           url: revalidatedPolicy._url,
           status: revalidatedPolicy._status,

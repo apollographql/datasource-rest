@@ -65,9 +65,7 @@ export abstract class RESTDataSource {
     return url.toString();
   }
 
-  protected willSendRequest?(
-    requestOpts: RequestOptions,
-  ): ValueOrPromise<void>;
+  protected willSendRequest?(requestOpts: RequestOptions): ValueOrPromise<void>;
 
   protected resolveURL(path: string): ValueOrPromise<URL> {
     if (path.startsWith('/')) {
@@ -230,20 +228,15 @@ export abstract class RESTDataSource {
     const cacheKey = this.cacheKeyFor(url, modifiedRequest);
 
     const performRequest = async () => {
-      const urlString = url.toString();
-      return this.trace(urlString, modifiedRequest, async () => {
+      return this.trace(url, modifiedRequest, async () => {
         const cacheOptions = modifiedRequest.cacheOptions
           ? modifiedRequest.cacheOptions
           : this.cacheOptionsFor?.bind(this);
         try {
-          const response = await this.httpCache.fetch(
-            urlString,
-            modifiedRequest,
-            {
-              cacheKey,
-              cacheOptions,
-            },
-          );
+          const response = await this.httpCache.fetch(url, modifiedRequest, {
+            cacheKey,
+            cacheOptions,
+          });
           return await this.didReceiveResponse(response, modifiedRequest);
         } catch (error) {
           this.didEncounterError(error as Error, modifiedRequest);
@@ -265,7 +258,7 @@ export abstract class RESTDataSource {
   }
 
   protected async trace<TResult>(
-    url: string,
+    url: URL,
     request: RequestOptions,
     fn: () => Promise<TResult>,
   ): Promise<TResult> {

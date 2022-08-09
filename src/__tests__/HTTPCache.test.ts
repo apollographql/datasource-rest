@@ -27,7 +27,8 @@ describe('HTTPCache', () => {
 
   const apiUrl = 'https://api.example.com';
   const adaPath = '/people/1';
-  const adaUrl = `${apiUrl}${adaPath}`;
+  const adaUrl = new URL(`${apiUrl}${adaPath}`);
+
   function mockGetAdaLovelace(headers: { [key: string]: string } = {}) {
     return nock(apiUrl).get(adaPath).reply(
       200,
@@ -84,7 +85,9 @@ describe('HTTPCache', () => {
 
     mockGetAlanTuring({ 'cache-control': 'max-age=30' });
 
-    const response = await httpCache.fetch('https://api.example.com/people/1');
+    const response = await httpCache.fetch(
+      new URL('https://api.example.com/people/1'),
+    );
 
     expect(await response.json()).toEqual({ name: 'Alan Turing' });
     expect(response.headers.get('age')).toEqual('0');
@@ -139,7 +142,7 @@ describe('HTTPCache', () => {
       });
 
       const response = await httpCache.fetch(
-        'https://api.example.com/people/1',
+        new URL('https://api.example.com/people/1'),
       );
 
       expect(await response.json()).toEqual({ name: 'Alan Turing' });
@@ -166,7 +169,7 @@ describe('HTTPCache', () => {
       });
 
       const response = await httpCache.fetch(
-        'https://api.example.com/people/1',
+        new URL('https://api.example.com/people/1'),
       );
 
       expect(await response.json()).toEqual({ name: 'Alan Turing' });
@@ -236,12 +239,16 @@ describe('HTTPCache', () => {
       .query({ foo: '123' })
       .reply(200, { name: 'Ada Lovelace' }, { 'cache-control': 'max-age=30' });
 
-    await httpCache.fetch(`${adaUrl}?foo=123`, {}, { cacheKey: adaUrl });
+    await httpCache.fetch(
+      new URL(`${adaUrl}?foo=123`),
+      {},
+      { cacheKey: adaUrl.toString() },
+    );
 
     const response = await httpCache.fetch(
-      `${adaUrl}?foo=456`,
+      new URL(`${adaUrl}?foo=456`),
       {},
-      { cacheKey: adaUrl },
+      { cacheKey: adaUrl.toString() },
     );
 
     expect(await response.json()).toEqual({ name: 'Ada Lovelace' });
@@ -310,9 +317,12 @@ describe('HTTPCache', () => {
 
     mockGetAlanTuring({ 'cache-control': 'max-age=30' });
 
-    const response = await httpCache.fetch('https://api.example.com/people/1', {
-      headers: { 'accept-language': 'fr' },
-    });
+    const response = await httpCache.fetch(
+      new URL('https://api.example.com/people/1'),
+      {
+        headers: { 'accept-language': 'fr' },
+      },
+    );
 
     expect(await response.json()).toEqual({ name: 'Alan Turing' });
   });
@@ -396,14 +406,18 @@ describe('HTTPCache', () => {
       etag: 'bar',
     });
 
-    const response = await httpCache.fetch('https://api.example.com/people/1');
+    const response = await httpCache.fetch(
+      new URL('https://api.example.com/people/1'),
+    );
 
     expect(response.status).toEqual(200);
     expect(await response.json()).toEqual({ name: 'Alan Turing' });
 
     jest.advanceTimersByTime(10000);
 
-    const response2 = await httpCache.fetch('https://api.example.com/people/1');
+    const response2 = await httpCache.fetch(
+      new URL('https://api.example.com/people/1'),
+    );
 
     expect(response2.status).toEqual(200);
     expect(await response2.json()).toEqual({ name: 'Alan Turing' });
