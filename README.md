@@ -175,7 +175,7 @@ const url = await startStandaloneServer(server, {
   async context({ req }) { 
     return {
       moviesAPI: new MoviesAPI(),
-      personalizationAPI: new PersonalizationAPI(),
+      personalizationAPI: new PersonalizationAPI(req.headers['authorization']),
     };
   },
 });
