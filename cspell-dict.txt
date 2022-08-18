@@ -1,8 +1,16 @@
 apollographql
+asynciterable
+authed
+beyoncé
 changesets
 cimg
 circleci
 codesandbox
+datasource
 direnv
 httpcache
+keyvaluecache
 opde
+revalidates
+unmock
+withrequired
