@@ -1,7 +1,7 @@
 {
   "name": "@apollo/datasource-rest",
   "private": true,
-  "description": "A REST data source for Apollo Server",
+  "description": "REST DataSource for Apollo Server v4",
   "version": "3.0.0",
   "author": "Apollo <packages@apollographql.com>",
   "license": "MIT",
