@@ -1,17 +1,17 @@
 {
-  "name": "@apollo/typescript-repo-template",
+  "name": "@apollo/datasource-rest",
   "private": true,
-  "description": "A template for TypeScript projects with pre-configured tooling",
+  "description": "REST DataSource for Apollo Server v4",
   "version": "0.0.0",
   "author": "Apollo <packages@apollographql.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/apollographql/typescript-repo-template"
+    "url": "https://github.com/apollographql/datasource-rest"
   },
-  "homepage": "https://github.com/apollographql/typescript-repo-template#readme",
+  "homepage": "https://github.com/apollographql/datasource-rest#readme",
   "bugs": {
-    "url": "https://github.com/apollographql/typescript-repo-template/issues"
+    "url": "https://github.com/apollographql/datasource-rest/issues"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
