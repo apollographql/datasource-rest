@@ -71,3 +71,4 @@ workflows:
                 - "16"
                 - "18"
       - Prettier
+      - Spell Check
