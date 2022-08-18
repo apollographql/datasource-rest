@@ -1,97 +1,81 @@
-import { fetch, URL, Request } from './mock-apollo-server-env';
-
+// import fetch, { Request } from 'node-fetch';
 import {
-  ApolloError,
   AuthenticationError,
+  DataSourceConfig,
   ForbiddenError,
-} from 'apollo-server-errors';
-import { RESTDataSource, RequestOptions } from '../RESTDataSource';
+  RequestOptions,
+  RESTDataSource,
+  // RequestOptions
+} from '../RESTDataSource';
 
-import { HTTPCache } from '../HTTPCache';
-import { MapKeyValueCache } from './MapKeyValueCache';
+// import { HTTPCache } from '../HTTPCache';
+// import { MapKeyValueCache } from './MapKeyValueCache';
+import { nockAfterEach, nockBeforeEach } from './nockAssertions';
+import nock from 'nock';
+import { GraphQLError } from 'graphql';
+
+const apiUrl = 'https://api.example.com';
 
 describe('RESTDataSource', () => {
-  let httpCache: HTTPCache;
+  // let httpCache: HTTPCache;
 
   beforeEach(() => {
-    httpCache = new HTTPCache(new MapKeyValueCache<string>());
+    nockBeforeEach();
+    // httpCache = new HTTPCache(new MapKeyValueCache<string>());
   });
 
-  beforeEach(() => {
-    fetch.mockReset();
-  });
+  afterEach(nockAfterEach);
 
   describe('constructing requests', () => {
     it('interprets paths relative to the base URL', async () => {
       const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com';
+        override baseURL = apiUrl;
 
         getFoo() {
           return this.get('foo');
         }
       })();
 
-      dataSource.httpCache = httpCache;
-
-      fetch.mockJSONResponseOnce();
+      nock(apiUrl).get('/foo').reply(200, {});
 
       await dataSource.getFoo();
-
-      expect(fetch).toBeCalledTimes(1);
-      expect((fetch.mock.calls[0][0] as Request).url).toEqual(
-        'https://api.example.com/foo',
-      );
     });
 
     it('interprets paths with a leading slash relative to the base URL', async () => {
       const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com/bar';
+        override baseURL = `${apiUrl}/bar`;
 
         getFoo() {
           return this.get('/foo');
         }
       })();
 
-      dataSource.httpCache = httpCache;
-
-      fetch.mockJSONResponseOnce();
+      nock(apiUrl).get('/bar/foo').reply(200, {});
 
       await dataSource.getFoo();
-
-      expect(fetch).toBeCalledTimes(1);
-      expect((fetch.mock.calls[0][0] as Request).url).toEqual(
-        'https://api.example.com/bar/foo',
-      );
     });
 
     it('adds a trailing slash to the base URL if needed', async () => {
       const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://example.com/api';
+        override baseURL = `${apiUrl}/api`;
 
         getFoo() {
           return this.get('foo');
         }
       })();
 
-      dataSource.httpCache = httpCache;
-
-      fetch.mockJSONResponseOnce();
+      nock(apiUrl).get('/api/foo').reply(200, {});
 
       await dataSource.getFoo();
-
-      expect(fetch).toBeCalledTimes(1);
-      expect((fetch.mock.calls[0][0] as Request).url).toEqual(
-        'https://example.com/api/foo',
-      );
     });
 
     it('allows resolving a base URL asynchronously', async () => {
       const dataSource = new (class extends RESTDataSource {
-        override async resolveURL(request: RequestOptions) {
+        override async resolveURL(path: string, request: RequestOptions) {
           if (!this.baseURL) {
             this.baseURL = 'https://api.example.com';
           }
-          return super.resolveURL(request);
+          return super.resolveURL(path, request);
         }
 
         getFoo() {
@@ -99,15 +83,9 @@ describe('RESTDataSource', () => {
         }
       })();
 
-      dataSource.httpCache = httpCache;
+      nock(apiUrl).get('/foo').reply(200, {});
 
-      fetch.mockJSONResponseOnce();
       await dataSource.getFoo();
-
-      expect(fetch).toBeCalledTimes(1);
-      expect((fetch.mock.calls[0][0] as Request).url).toEqual(
-        'https://api.example.com/foo',
-      );
     });
 
     it('allows passing in query string parameters', async () => {
@@ -118,50 +96,58 @@ describe('RESTDataSource', () => {
           username: string,
           params: { filter: string; limit: number; offset: number },
         ) {
-          return this.get('posts', Object.assign({ username }, params));
+          return this.get('posts', {
+            params: {
+              username,
+              filter: params.filter,
+              limit: params.limit.toString(),
+              offset: params.offset.toString(),
+            },
+          });
         }
       })();
 
-      dataSource.httpCache = httpCache;
-
-      fetch.mockJSONResponseOnce();
+      nock(apiUrl)
+        .get('/posts')
+        .query({
+          username: 'beyoncé',
+          filter: 'jalapeño',
+          limit: 10,
+          offset: 20,
+        })
+        .reply(200);
 
       await dataSource.getPostsForUser('beyoncé', {
         filter: 'jalapeño',
         limit: 10,
         offset: 20,
       });
-
-      expect(fetch).toBeCalledTimes(1);
-      expect((fetch.mock.calls[0][0] as Request).url).toEqual(
-        'https://api.example.com/posts?username=beyonc%C3%A9&filter=jalape%C3%B1o&limit=10&offset=20',
-      );
     });
 
     it('allows setting default query string parameters', async () => {
-      const dataSource = new (class extends RESTDataSource {
+      class AuthedDataSource extends RESTDataSource {
         override baseURL = 'https://api.example.com';
 
+        constructor(private token: string, config?: DataSourceConfig) {
+          super(config);
+        }
+
         override willSendRequest(request: RequestOptions) {
-          request.params.set('api_key', this.context.token);
+          const params = new URLSearchParams(request.params);
+          params.set('apiKey', this.token);
+          request.params = params;
         }
 
-        getFoo() {
-          return this.get('foo', { a: 1 });
+        getFoo(id: string) {
+          return this.get('foo', { params: { id } });
         }
-      })();
+      }
 
-      dataSource.context = { token: 'secret' };
-      dataSource.httpCache = httpCache;
+      const dataSource = new AuthedDataSource('secret');
 
-      fetch.mockJSONResponseOnce();
+      nock(apiUrl).get('/foo').query({ id: '1', apiKey: 'secret' }).reply(200);
 
-      await dataSource.getFoo();
-
-      expect(fetch).toBeCalledTimes(1);
-      expect((fetch.mock.calls[0][0] as Request).url).toEqual(
-        'https://api.example.com/foo?a=1&api_key=secret',
-      );
+      await dataSource.getFoo('1');
     });
 
     it('allows setting default fetch options', async () => {
@@ -169,7 +155,7 @@ describe('RESTDataSource', () => {
         override baseURL = 'https://api.example.com';
 
         override willSendRequest(request: RequestOptions) {
-          request.credentials = 'include';
+          request.headers = { ...request.headers, credentials: 'include' };
         }
 
         getFoo() {
@@ -177,89 +163,85 @@ describe('RESTDataSource', () => {
         }
       })();
 
-      dataSource.httpCache = httpCache;
-
-      fetch.mockJSONResponseOnce();
+      nock(apiUrl).get('/foo').matchHeader('credentials', 'include').reply(200);
 
       await dataSource.getFoo();
-
-      expect(fetch).toBeCalledTimes(1);
-      // TODO: request.credentials is not supported by node-fetch
-      // expect(fetch.mock.calls[0][0].credentials).toEqual('include');
     });
 
     it('allows setting request headers', async () => {
-      const dataSource = new (class extends RESTDataSource {
+      class AuthedDataSource extends RESTDataSource {
         override baseURL = 'https://api.example.com';
 
+        constructor(private token: string, config?: DataSourceConfig) {
+          super(config);
+        }
+
         override willSendRequest(request: RequestOptions) {
-          request.headers.set('Authorization', this.context.token);
+          request.headers = { ...request.headers, authorization: this.token };
         }
 
-        getFoo() {
-          return this.get('foo');
+        getFoo(id: string) {
+          return this.get('foo', { params: { id } });
         }
-      })();
+      }
 
-      dataSource.context = { token: 'secret' };
-      dataSource.httpCache = httpCache;
+      const dataSource = new AuthedDataSource('secret');
 
-      fetch.mockJSONResponseOnce();
+      nock(apiUrl)
+        .get('/foo')
+        .query({ id: '1' })
+        .matchHeader('authorization', 'secret')
+        .reply(200);
 
-      await dataSource.getFoo();
-
-      expect(fetch).toBeCalledTimes(1);
-      expect(
-        (fetch.mock.calls[0][0] as Request).headers.get('Authorization'),
-      ).toEqual('secret');
+      await dataSource.getFoo('1');
     });
 
-    function expectJSONFetch(url: string, bodyJSON: unknown) {
-      expect(fetch).toBeCalledTimes(1);
-      const request = fetch.mock.calls[0][0] as Request;
-      expect(request.url).toEqual(url);
-      // request.body is a node-fetch extension which we aren't properly
-      // capturing in our TS types.
-      expect((request as any).body.toString()).toEqual(
-        JSON.stringify(bodyJSON),
-      );
-      expect(request.headers.get('Content-Type')).toEqual('application/json');
-    }
+    //   function expectJSONFetch(url: string, bodyJSON: unknown) {
+    //     expect(fetch).toBeCalledTimes(1);
+    //     const request = fetch.mock.calls[0][0] as Request;
+    //     expect(request.url).toEqual(url);
+    //     // request.body is a node-fetch extension which we aren't properly
+    //     // capturing in our TS types.
+    //     expect((request as any).body.toString()).toEqual(
+    //       JSON.stringify(bodyJSON),
+    //     );
+    //     expect(request.headers.get('Content-Type')).toEqual('application/json');
+    //   }
 
     it('serializes a request body that is an object as JSON', async () => {
+      const expectedFoo = { foo: 'bar' };
       const dataSource = new (class extends RESTDataSource {
         override baseURL = 'https://api.example.com';
 
         postFoo(foo: object) {
-          return this.post('foo', foo);
+          return this.post('foo', { body: foo });
         }
       })();
 
-      dataSource.httpCache = httpCache;
+      nock(apiUrl)
+        .post('/foo', expectedFoo)
+        .matchHeader('content-type', 'application/json')
+        .reply(200);
 
-      fetch.mockJSONResponseOnce();
-
-      await dataSource.postFoo({ foo: 'bar' });
-
-      expectJSONFetch('https://api.example.com/foo', { foo: 'bar' });
+      await dataSource.postFoo(expectedFoo);
     });
 
     it('serializes a request body that is an array as JSON', async () => {
+      const expected = ['foo', 'bar'];
       const dataSource = new (class extends RESTDataSource {
         override baseURL = 'https://api.example.com';
 
         postFoo(foo: string[]) {
-          return this.post('foo', foo);
+          return this.post('foo', { body: foo });
         }
       })();
 
-      dataSource.httpCache = httpCache;
+      nock(apiUrl)
+        .post('/foo', expected)
+        .matchHeader('content-type', 'application/json')
+        .reply(200);
 
-      fetch.mockJSONResponseOnce();
-
-      await dataSource.postFoo(['foo', 'bar']);
-
-      expectJSONFetch('https://api.example.com/foo', ['foo', 'bar']);
+      await dataSource.postFoo(expected);
     });
 
     it('serializes a request body that has a toJSON method as JSON', async () => {
@@ -267,13 +249,9 @@ describe('RESTDataSource', () => {
         override baseURL = 'https://api.example.com';
 
         postFoo(foo: Model) {
-          return this.post('foo', foo);
+          return this.post('foo', { body: foo });
         }
       })();
-
-      dataSource.httpCache = httpCache;
-
-      fetch.mockJSONResponseOnce();
 
       class Model {
         constructor(public baz: any) {}
@@ -286,9 +264,12 @@ describe('RESTDataSource', () => {
       }
       const model = new Model('bar');
 
-      await dataSource.postFoo(model);
+      nock(apiUrl)
+        .post('/foo', { foo: 'bar' })
+        .matchHeader('content-type', 'application/json')
+        .reply(200);
 
-      expectJSONFetch('https://api.example.com/foo', { foo: 'bar' });
+      await dataSource.postFoo(model);
     });
 
     it('does not serialize a request body that is not an object', async () => {
@@ -296,31 +277,19 @@ describe('RESTDataSource', () => {
         override baseURL = 'https://api.example.com';
 
         postFoo(foo: FormData) {
-          return this.post('foo', foo);
+          return this.post('foo', { body: foo });
         }
       })();
-
-      dataSource.httpCache = httpCache;
-
-      fetch.mockJSONResponseOnce();
 
       class FormData {}
       const form = new FormData();
 
-      await dataSource.postFoo(form);
+      nock(apiUrl).post('/foo').reply(200);
 
-      expect(fetch).toBeCalledTimes(1);
-      const request = fetch.mock.calls[0][0] as Request;
-      expect(request.url).toEqual('https://api.example.com/foo');
-      // request.body is a node-fetch extension which we aren't properly
-      // capturing in our TS types.
-      expect((request as any).body.toString()).not.toEqual('{}');
-      expect(request.headers.get('Content-Type')).not.toEqual(
-        'application/json',
-      );
+      await dataSource.postFoo(form);
     });
 
-    for (const method of ['GET', 'POST', 'PATCH', 'PUT', 'DELETE']) {
+    describe('all methods', () => {
       const dataSource = new (class extends RESTDataSource {
         override baseURL = 'https://api.example.com';
 
@@ -345,438 +314,413 @@ describe('RESTDataSource', () => {
         }
       })();
 
-      it(`allows performing ${method} requests`, async () => {
-        dataSource.httpCache = httpCache;
+      const expectedFoo = { foo: 'bar' };
 
-        fetch.mockJSONResponseOnce({ foo: 'bar' });
+      it('GET', async () => {
+        nock(apiUrl).get('/foo').reply(200, expectedFoo);
 
-        const data = await (dataSource as any)[
-          `${method.toLocaleLowerCase()}Foo`
-        ]();
+        const data = await dataSource.getFoo();
+
+        expect(data).toEqual(expectedFoo);
+      });
+
+      it('POST', async () => {
+        nock(apiUrl).post('/foo').reply(200, expectedFoo);
+
+        const data = await dataSource.postFoo();
+
+        expect(data).toEqual(expectedFoo);
+      });
+
+      it('PATCH', async () => {
+        nock(apiUrl).patch('/foo').reply(200, expectedFoo);
+
+        const data = await dataSource.patchFoo();
+
+        expect(data).toEqual(expectedFoo);
+      });
+
+      it('PUT', async () => {
+        nock(apiUrl).put('/foo').reply(200, expectedFoo);
+
+        const data = await dataSource.putFoo();
+
+        expect(data).toEqual(expectedFoo);
+      });
+
+      it('DELETE', async () => {
+        nock(apiUrl).delete('/foo').reply(200, expectedFoo);
+
+        const data = await dataSource.deleteFoo();
+
+        expect(data).toEqual(expectedFoo);
+      });
+    });
+
+    describe('response parsing', () => {
+      it('returns data as parsed JSON when Content-Type is application/json', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          getFoo() {
+            return this.get('foo');
+          }
+        })();
+
+        nock(apiUrl)
+          .get('/foo')
+          .reply(200, { foo: 'bar' }, { 'content-type': 'application/json' });
+
+        const data = await dataSource.getFoo();
 
         expect(data).toEqual({ foo: 'bar' });
-
-        expect(fetch).toBeCalledTimes(1);
-        expect((fetch.mock.calls[0][0] as Request).method).toEqual(method);
-      });
-    }
-  });
-
-  describe('response parsing', () => {
-    it('returns data as parsed JSON when Content-Type is application/json', async () => {
-      const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com';
-
-        getFoo() {
-          return this.get('foo');
-        }
-      })();
-
-      dataSource.httpCache = httpCache;
-
-      fetch.mockJSONResponseOnce(
-        { foo: 'bar' },
-        { 'Content-Type': 'application/json' },
-      );
-
-      const data = await dataSource.getFoo();
-
-      expect(data).toEqual({ foo: 'bar' });
-    });
-
-    it('returns data as parsed JSON when Content-Type is application/hal+json', async () => {
-      const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com';
-
-        getFoo() {
-          return this.get('foo');
-        }
-      })();
-
-      dataSource.httpCache = httpCache;
-
-      fetch.mockJSONResponseOnce(
-        { foo: 'bar' },
-        { 'Content-Type': 'application/hal+json' },
-      );
-
-      const data = await dataSource.getFoo();
-
-      expect(data).toEqual({ foo: 'bar' });
-    });
-
-    it('returns data as parsed JSON when Content-Type ends in +json', async () => {
-      const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com';
-
-        getFoo() {
-          return this.get('foo');
-        }
-      })();
-
-      dataSource.httpCache = httpCache;
-
-      fetch.mockJSONResponseOnce(
-        { foo: 'bar' },
-        { 'Content-Type': 'application/vnd.api+json' },
-      );
-
-      const data = await dataSource.getFoo();
-
-      expect(data).toEqual({ foo: 'bar' });
-    });
-
-    it('returns data as a string when Content-Type is text/plain', async () => {
-      const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com';
-
-        getFoo() {
-          return this.get('foo');
-        }
-      })();
-
-      dataSource.httpCache = httpCache;
-
-      fetch.mockResponseOnce('bar', { 'Content-Type': 'text/plain' });
-
-      const data = await dataSource.getFoo();
-
-      expect(data).toEqual('bar');
-    });
-
-    it('attempts to return data as a string when no Content-Type header is returned', async () => {
-      const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com';
-
-        getFoo() {
-          return this.get('foo');
-        }
-      })();
-
-      dataSource.httpCache = httpCache;
-
-      fetch.mockResponseOnce('bar');
-
-      const data = await dataSource.getFoo();
-
-      expect(data).toEqual('bar');
-    });
-
-    it('returns data as a string when response status code is 204 no content', async () => {
-      const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com';
-
-        getFoo() {
-          return this.get('');
-        }
-      })();
-
-      dataSource.httpCache = httpCache;
-
-      fetch.mockResponseOnce('', { 'Content-Type': 'application/json' }, 204);
-
-      const data = await dataSource.getFoo();
-
-      expect(data).toEqual('');
-    });
-
-    it('returns empty object when response content length is 0', async () => {
-      const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com';
-
-        getFoo() {
-          return this.get('');
-        }
-      })();
-
-      dataSource.httpCache = httpCache;
-
-      fetch.mockResponseOnce('', {
-        'Content-Type': 'application/json',
-        'Content-Length': '0',
       });
 
-      const data = await dataSource.getFoo();
+      it('returns data as parsed JSON when Content-Type is application/hal+json', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
 
-      expect(data).toEqual('');
+          getFoo() {
+            return this.get('foo');
+          }
+        })();
+
+        nock(apiUrl)
+          .get('/foo')
+          .reply(
+            200,
+            { foo: 'bar' },
+            { 'content-type': 'application/hal+json' },
+          );
+
+        const data = await dataSource.getFoo();
+
+        expect(data).toEqual({ foo: 'bar' });
+      });
+
+      it('returns data as parsed JSON when Content-Type ends in +json', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          getFoo() {
+            return this.get('foo');
+          }
+        })();
+
+        nock(apiUrl)
+          .get('/foo')
+          .reply(
+            200,
+            { foo: 'bar' },
+            { 'content-type': 'application/vnd.api+json' },
+          );
+
+        const data = await dataSource.getFoo();
+
+        expect(data).toEqual({ foo: 'bar' });
+      });
+
+      it('returns data as a string when Content-Type is text/plain', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          getFoo() {
+            return this.get('foo');
+          }
+        })();
+
+        nock(apiUrl)
+          .get('/foo')
+          .reply(200, 'bar', { 'content-type': 'text/plain' });
+
+        const data = await dataSource.getFoo();
+
+        expect(data).toEqual('bar');
+      });
+
+      it('attempts to return data as a string when no Content-Type header is returned', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          getFoo() {
+            return this.get('foo');
+          }
+        })();
+
+        nock(apiUrl).get('/foo').reply(200, 'bar');
+
+        const data = await dataSource.getFoo();
+
+        expect(data).toEqual('bar');
+      });
+
+      it('returns data as a string when response status code is 204 no content', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          getFoo() {
+            return this.get('');
+          }
+        })();
+
+        nock(apiUrl)
+          .get('/')
+          .reply(204, '', { 'content-type': 'application/json' });
+
+        const data = await dataSource.getFoo();
+
+        expect(data).toEqual('');
+      });
+
+      it('returns empty object when response content length is 0', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          getFoo() {
+            return this.get('');
+          }
+        })();
+
+        nock(apiUrl).get('/').reply(200, '', {
+          'content-type': 'application/json',
+          'content-length': '0',
+        });
+
+        const data = await dataSource.getFoo();
+
+        expect(data).toEqual('');
+      });
     });
-  });
 
-  describe('memoization', () => {
-    it('deduplicates requests with the same cache key', async () => {
-      const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com';
+    describe('memoization', () => {
+      it('deduplicates requests with the same cache key', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
 
-        getFoo(id: number) {
-          return this.get(`foo/${id}`);
-        }
-      })();
+          getFoo(id: number) {
+            return this.get(`foo/${id}`);
+          }
+        })();
 
-      dataSource.httpCache = httpCache;
+        nock(apiUrl).get('/foo/1').reply(200);
 
-      fetch.mockJSONResponseOnce();
+        await Promise.all([dataSource.getFoo(1), dataSource.getFoo(1)]);
+      });
 
-      await Promise.all([dataSource.getFoo(1), dataSource.getFoo(1)]);
+      it('does not deduplicate requests with a different cache key', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
 
-      expect(fetch).toBeCalledTimes(1);
-      expect((fetch.mock.calls[0][0] as Request).url).toEqual(
-        'https://api.example.com/foo/1',
-      );
+          getFoo(id: number) {
+            return this.get(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(200);
+        nock(apiUrl).get('/foo/2').reply(200);
+
+        await Promise.all([dataSource.getFoo(1), dataSource.getFoo(2)]);
+      });
+
+      it('does not deduplicate non-GET requests', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          postFoo(id: number) {
+            return this.post(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).post('/foo/1').reply(200);
+        nock(apiUrl).post('/foo/1').reply(200);
+
+        await Promise.all([dataSource.postFoo(1), dataSource.postFoo(1)]);
+      });
+
+      it('non-GET request removes memoized request with the same cache key', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          getFoo(id: number) {
+            return this.get(`foo/${id}`);
+          }
+
+          postFoo(id: number) {
+            return this.post(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(200);
+        nock(apiUrl).post('/foo/1').reply(200);
+        nock(apiUrl).get('/foo/1').reply(200);
+
+        await Promise.all([
+          dataSource.getFoo(1),
+          dataSource.postFoo(1),
+          dataSource.getFoo(1),
+        ]);
+      });
+
+      it('allows specifying a custom cache key', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          override cacheKeyFor(url: URL, _request: RequestOptions) {
+            const urlNoSearchParams = new URL(url);
+            urlNoSearchParams.search = '';
+            return urlNoSearchParams.toString();
+          }
+
+          getFoo(id: number, apiKey: string) {
+            return this.get(`foo/${id}`, {
+              params: { api_key: apiKey },
+            });
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').query({ api_key: 'secret' }).reply(200);
+
+        await Promise.all([
+          dataSource.getFoo(1, 'secret'),
+          dataSource.getFoo(1, 'anotherSecret'),
+        ]);
+      });
     });
 
-    it('does not deduplicate requests with a different cache key', async () => {
-      const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com';
+    describe('error handling', () => {
+      it('throws an AuthenticationError when the response status is 401', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
 
-        getFoo(id: number) {
-          return this.get(`foo/${id}`);
-        }
-      })();
+          getFoo() {
+            return this.get('foo');
+          }
+        })();
 
-      dataSource.httpCache = httpCache;
+        nock(apiUrl).get('/foo').reply(401, 'Invalid token');
 
-      fetch.mockJSONResponseOnce();
-      fetch.mockJSONResponseOnce();
-
-      await Promise.all([dataSource.getFoo(1), dataSource.getFoo(2)]);
-
-      expect(fetch.mock.calls.length).toEqual(2);
-      expect((fetch.mock.calls[0][0] as Request).url).toEqual(
-        'https://api.example.com/foo/1',
-      );
-      expect((fetch.mock.calls[1][0] as Request).url).toEqual(
-        'https://api.example.com/foo/2',
-      );
-    });
-
-    it('does not deduplicate non-GET requests', async () => {
-      const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com';
-
-        postFoo(id: number) {
-          return this.post(`foo/${id}`);
-        }
-      })();
-
-      dataSource.httpCache = httpCache;
-
-      fetch.mockJSONResponseOnce();
-      fetch.mockJSONResponseOnce();
-
-      await Promise.all([dataSource.postFoo(1), dataSource.postFoo(1)]);
-
-      expect(fetch.mock.calls.length).toEqual(2);
-    });
-
-    it('non-GET request removes memoized request with the same cache key', async () => {
-      const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com';
-
-        getFoo(id: number) {
-          return this.get(`foo/${id}`);
-        }
-
-        postFoo(id: number) {
-          return this.post(`foo/${id}`);
-        }
-      })();
-
-      dataSource.httpCache = httpCache;
-
-      fetch.mockJSONResponseOnce();
-      fetch.mockJSONResponseOnce();
-      fetch.mockJSONResponseOnce();
-
-      await Promise.all([
-        dataSource.getFoo(1),
-        dataSource.postFoo(1),
-        dataSource.getFoo(1),
-      ]);
-
-      expect(fetch.mock.calls.length).toEqual(3);
-      expect((fetch.mock.calls[0][0] as Request).url).toEqual(
-        'https://api.example.com/foo/1',
-      );
-      expect((fetch.mock.calls[2][0] as Request).url).toEqual(
-        'https://api.example.com/foo/1',
-      );
-    });
-
-    it('allows specifying a custom cache key', async () => {
-      const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com';
-
-        override cacheKeyFor(request: Request) {
-          const url = new URL(request.url);
-          url.search = '';
-          return url.toString();
-        }
-
-        getFoo(id: number, apiKey: string) {
-          return this.get(`foo/${id}`, { api_key: apiKey });
-        }
-      })();
-
-      dataSource.httpCache = httpCache;
-
-      fetch.mockJSONResponseOnce();
-
-      await Promise.all([
-        dataSource.getFoo(1, 'secret'),
-        dataSource.getFoo(1, 'anotherSecret'),
-      ]);
-
-      expect(fetch).toBeCalledTimes(1);
-      expect((fetch.mock.calls[0][0] as Request).url).toEqual(
-        'https://api.example.com/foo/1?api_key=secret',
-      );
-    });
-  });
-
-  describe('error handling', () => {
-    it('throws an AuthenticationError when the response status is 401', async () => {
-      const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com';
-
-        getFoo() {
-          return this.get('foo');
-        }
-      })();
-
-      dataSource.httpCache = httpCache;
-
-      fetch.mockResponseOnce('Invalid token', undefined, 401);
-
-      const result = dataSource.getFoo();
-      await expect(result).rejects.toThrow(AuthenticationError);
-      await expect(result).rejects.toMatchObject({
-        extensions: {
-          code: 'UNAUTHENTICATED',
-          response: {
-            status: 401,
-            body: 'Invalid token',
+        const result = dataSource.getFoo();
+        await expect(result).rejects.toThrow(AuthenticationError);
+        await expect(result).rejects.toMatchObject({
+          extensions: {
+            code: 'UNAUTHENTICATED',
+            response: {
+              status: 401,
+              body: 'Invalid token',
+            },
           },
-        },
+        });
       });
-    });
 
-    it('throws a ForbiddenError when the response status is 403', async () => {
-      const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com';
+      it('throws a ForbiddenError when the response status is 403', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
 
-        getFoo() {
-          return this.get('foo');
-        }
-      })();
+          getFoo() {
+            return this.get('foo');
+          }
+        })();
 
-      dataSource.httpCache = httpCache;
+        nock(apiUrl).get('/foo').reply(403, 'No access');
 
-      fetch.mockResponseOnce('No access', undefined, 403);
-
-      const result = dataSource.getFoo();
-      await expect(result).rejects.toThrow(ForbiddenError);
-      await expect(result).rejects.toMatchObject({
-        extensions: {
-          code: 'FORBIDDEN',
-          response: {
-            status: 403,
-            body: 'No access',
+        const result = dataSource.getFoo();
+        await expect(result).rejects.toThrow(ForbiddenError);
+        await expect(result).rejects.toMatchObject({
+          extensions: {
+            code: 'FORBIDDEN',
+            response: {
+              status: 403,
+              body: 'No access',
+            },
           },
-        },
+        });
       });
-    });
 
-    it('throws an ApolloError when the response status is 500', async () => {
-      const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com';
+      it('throws an ApolloError when the response status is 500', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
 
-        getFoo() {
-          return this.get('foo');
-        }
-      })();
+          getFoo() {
+            return this.get('foo');
+          }
+        })();
 
-      dataSource.httpCache = httpCache;
+        nock(apiUrl).get('/foo').reply(500, 'Oops');
 
-      fetch.mockResponseOnce('Oops', undefined, 500);
-
-      const result = dataSource.getFoo();
-      await expect(result).rejects.toThrow(ApolloError);
-      await expect(result).rejects.toMatchObject({
-        extensions: {
-          response: {
-            status: 500,
-            body: 'Oops',
+        const result = dataSource.getFoo();
+        await expect(result).rejects.toThrow(GraphQLError);
+        await expect(result).rejects.toMatchObject({
+          extensions: {
+            response: {
+              status: 500,
+              body: 'Oops',
+            },
           },
-        },
+        });
       });
-    });
 
-    it('puts JSON error responses on the error as an object', async () => {
-      const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com';
+      it('puts JSON error responses on the error as an object', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
 
-        getFoo() {
-          return this.get('foo');
-        }
-      })();
+          getFoo() {
+            return this.get('foo');
+          }
+        })();
 
-      dataSource.httpCache = httpCache;
-
-      fetch.mockResponseOnce(
-        JSON.stringify({
-          errors: [
+        nock(apiUrl)
+          .get('/foo')
+          .reply(
+            500,
             {
-              message: 'Houston, we have a problem.',
+              errors: [{ message: 'Houston, we have a problem.' }],
             },
-          ],
-        }),
-        { 'Content-Type': 'application/json' },
-        500,
-      );
+            { 'content-type': 'application/json' },
+          );
 
-      const result = dataSource.getFoo();
-      await expect(result).rejects.toThrow(ApolloError);
-      await expect(result).rejects.toMatchObject({
-        extensions: {
-          response: {
-            status: 500,
-            body: {
-              errors: [
-                {
-                  message: 'Houston, we have a problem.',
-                },
-              ],
+        const result = dataSource.getFoo();
+        await expect(result).rejects.toThrow(GraphQLError);
+        await expect(result).rejects.toMatchObject({
+          extensions: {
+            response: {
+              status: 500,
+              body: {
+                errors: [
+                  {
+                    message: 'Houston, we have a problem.',
+                  },
+                ],
+              },
             },
           },
-        },
+        });
       });
     });
-  });
 
-  describe('trace', () => {
-    it('is called once per request', async () => {
-      const traceMock = jest.fn();
-      const dataSource = new (class extends RESTDataSource {
-        override baseURL = 'https://api.example.com';
+    describe('trace', () => {
+      it('is called once per request', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
 
-        getFoo() {
-          return this.get('foo');
-        }
+          getFoo() {
+            return this.get('foo');
+          }
+        })();
 
-        override trace = traceMock;
-      })();
+        // @ts-ignore TS doesn't recognize the `trace` property on `RESTDataSource`
+        const traceSpy = jest.spyOn(dataSource, 'trace');
 
-      dataSource.httpCache = httpCache;
+        nock(apiUrl).get('/foo').reply(200);
 
-      fetch.mockJSONResponseOnce();
+        await dataSource.getFoo();
 
-      await dataSource.getFoo();
-
-      expect(traceMock).toBeCalledTimes(1);
-      expect(traceMock).toBeCalledWith(
-        expect.any(Object),
-        expect.any(Function),
-      );
+        expect(traceSpy).toBeCalledTimes(1);
+        expect(traceSpy).toBeCalledWith(
+          expect.any(URL),
+          expect.any(Object),
+          expect.any(Function),
+        );
+      });
     });
   });
 });
