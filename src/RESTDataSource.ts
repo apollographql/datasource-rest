@@ -57,12 +57,12 @@ export interface DataSourceConfig {
 export abstract class RESTDataSource {
   httpCache: HTTPCache;
   memoizedResults = new Map<string, Promise<any>>();
+  baseURL?: string;
+  requestCacheEnabled: boolean = true;
 
   constructor(config?: DataSourceConfig) {
     this.httpCache = new HTTPCache(config?.cache, config?.fetch);
   }
-
-  baseURL?: string;
 
   // By default, we use the full request URL as the cache key.
   // You can override this to remove query parameters or compute a cache key in any way that makes sense.
@@ -258,15 +258,21 @@ export abstract class RESTDataSource {
       });
     };
 
-    if (modifiedRequest.method === 'GET') {
-      let promise = this.memoizedResults.get(cacheKey);
-      if (promise) return promise;
+    // Cache GET requests based on the calculated cache key
+    // Disabling the request cache does not disable the response cache
+    if (this.requestCacheEnabled) {
+      if (request.method === 'GET') {
+        let promise = this.memoizedResults.get(cacheKey);
+        if (promise) return promise;
 
-      promise = performRequest();
-      this.memoizedResults.set(cacheKey, promise);
-      return promise;
+        promise = performRequest();
+        this.memoizedResults.set(cacheKey, promise);
+        return promise;
+      } else {
+        this.memoizedResults.delete(cacheKey);
+        return performRequest();
+      }
     } else {
-      this.memoizedResults.delete(cacheKey);
       return performRequest();
     }
   }
