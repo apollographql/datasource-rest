@@ -1,6 +1,6 @@
 // import fetch, { Request } from 'node-fetch';
 import {
-  AuthenticationError,
+  AuthenticationError, CacheOptions,
   DataSourceConfig,
   ForbiddenError,
   RequestOptions,
@@ -742,7 +742,7 @@ describe('RESTDataSource', () => {
 
     describe('http cache', () => {
       it('allows setting cache options for each request', async () => {
-        const dataSource = new (class extends RESTDataSource {
+        const dataSource = new class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
           override requestCacheEnabled = false;
 
@@ -751,13 +751,12 @@ describe('RESTDataSource', () => {
           }
 
           // Set a long TTL for every request
-          // @ts-ignore
-          override cacheOptionsFor(_, __): CacheOptions | undefined {
+          override cacheOptionsFor(): CacheOptions | undefined {
             return {
               ttl: 1000000,
             };
           }
-        })();
+        }();
 
         nock(apiUrl).get('/foo/1').reply(200);
         await dataSource.getFoo(1);
@@ -767,7 +766,7 @@ describe('RESTDataSource', () => {
       });
 
       it('allows setting a short TTL for the cache', async () => {
-        const dataSource = new (class extends RESTDataSource {
+        const dataSource = new class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
           override requestCacheEnabled = false;
 
@@ -776,13 +775,12 @@ describe('RESTDataSource', () => {
           }
 
           // Set a short TTL for every request
-          // @ts-ignore
-          override cacheOptionsFor(_, __): CacheOptions | undefined {
+          override cacheOptionsFor(): CacheOptions | undefined {
             return {
               ttl: 1,
             };
           }
-        })();
+        }();
 
         nock(apiUrl).get('/foo/1').reply(200);
         await dataSource.getFoo(1);
