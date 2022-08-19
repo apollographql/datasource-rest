@@ -2,6 +2,7 @@ apollographql
 asynciterable
 authed
 beyoncé
+cacheable
 changesets
 cimg
 circleci
