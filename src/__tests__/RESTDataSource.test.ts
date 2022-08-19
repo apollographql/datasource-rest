@@ -492,8 +492,8 @@ describe('RESTDataSource', () => {
       });
     });
 
-    describe('memoization', () => {
-      it('deduplicates requests with the same cache key', async () => {
+    describe('memoization/request cache', () => {
+      it('de-duplicates requests with the same cache key', async () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
 
@@ -584,6 +584,23 @@ describe('RESTDataSource', () => {
           dataSource.getFoo(1, 'secret'),
           dataSource.getFoo(1, 'anotherSecret'),
         ]);
+      });
+
+      it('allows disabling the GET cache', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+          override requestCacheEnabled = false;
+
+          getFoo(id: number) {
+            return this.get(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(200);
+        nock(apiUrl).get('/foo/1').reply(200);
+
+        // Expect two calls to pass
+        await Promise.all([dataSource.getFoo(1), dataSource.getFoo(1)]);
       });
     });
 
@@ -720,6 +737,63 @@ describe('RESTDataSource', () => {
           expect.any(Object),
           expect.any(Function),
         );
+      });
+    });
+
+    describe('http cache', () => {
+      it('allows setting cache options for each request', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+          override requestCacheEnabled = false;
+
+          getFoo(id: number) {
+            return this.get(`foo/${id}`);
+          }
+
+          // Set a long TTL for every request
+          // @ts-ignore
+          override cacheOptionsFor(_, __): CacheOptions | undefined {
+            return {
+              ttl: 1000000,
+            };
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(200);
+        await dataSource.getFoo(1);
+
+        // Call a second time which should be cached
+        await dataSource.getFoo(1);
+      });
+
+      it('allows setting a short TTL for the cache', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+          override requestCacheEnabled = false;
+
+          getFoo(id: number) {
+            return this.get(`foo/${id}`);
+          }
+
+          // Set a short TTL for every request
+          // @ts-ignore
+          override cacheOptionsFor(_, __): CacheOptions | undefined {
+            return {
+              ttl: 1,
+            };
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(200);
+        await dataSource.getFoo(1);
+
+        // Sleep for a little to expire cache
+        await new Promise((r) => setTimeout(r, 2000));
+
+        // Call a second time which should be invalid now
+        await expect(dataSource.getFoo(1))
+            .rejects
+            .toThrow();
       });
     });
   });
