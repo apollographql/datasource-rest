@@ -4,5 +4,6 @@
 *.md
 
 dist/
+coverage/
 
 .volta

@@ -1,6 +1,7 @@
 // import fetch, { Request } from 'node-fetch';
 import {
-  AuthenticationError, CacheOptions,
+  AuthenticationError,
+  CacheOptions,
   DataSourceConfig,
   ForbiddenError,
   RequestOptions,
@@ -742,7 +743,7 @@ describe('RESTDataSource', () => {
 
     describe('http cache', () => {
       it('allows setting cache options for each request', async () => {
-        const dataSource = new class extends RESTDataSource {
+        const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
           override requestCacheEnabled = false;
 
@@ -756,7 +757,7 @@ describe('RESTDataSource', () => {
               ttl: 1000000,
             };
           }
-        }();
+        })();
 
         nock(apiUrl).get('/foo/1').reply(200);
         await dataSource.getFoo(1);
@@ -766,7 +767,7 @@ describe('RESTDataSource', () => {
       });
 
       it('allows setting a short TTL for the cache', async () => {
-        const dataSource = new class extends RESTDataSource {
+        const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
           override requestCacheEnabled = false;
 
@@ -780,7 +781,7 @@ describe('RESTDataSource', () => {
               ttl: 1,
             };
           }
-        }();
+        })();
 
         nock(apiUrl).get('/foo/1').reply(200);
         await dataSource.getFoo(1);
@@ -789,9 +790,7 @@ describe('RESTDataSource', () => {
         await new Promise((r) => setTimeout(r, 2000));
 
         // Call a second time which should be invalid now
-        await expect(dataSource.getFoo(1))
-            .rejects
-            .toThrow();
+        await expect(dataSource.getFoo(1)).rejects.toThrow();
       });
     });
   });
