@@ -44,7 +44,7 @@ class MoviesAPI extends RESTDataSource {
 ```
 
 ### API Reference
-To see the all the properties and functions that can be overridden, the [source code](https://github.com/apollographql/apollo-server/tree/main/packages/apollo-datasource-rest) is always the best option.
+To see the all the properties and functions that can be overridden, the [source code](https://github.com/apollographql/datasource-rest/tree/main/src/RESTDataSource.ts) is always the best option.
 
 #### Properties
 ##### `baseURL`
@@ -98,7 +98,15 @@ For example, you could use this to use header fields as part of the cache key. E
 This method is invoked just before the fetch call is made. If a `Promise` is returned from this method it will wait until the promise is completed to continue executing the request.
 
 ##### `cacheOptionsFor`
-Allows setting the `CacheOptions` to be used for each request/response in the HTTPCache. This is separate from the request-only cache.
+Allows setting the `CacheOptions` to be used for each request/response in the HTTPCache. This is separate from the request-only cache. You can use this to set the TTL.
+
+```javascript
+override cacheOptionsFor() {
+    return {
+        ttl: 1
+    }
+}
+```
 
 ##### `didReceiveResponse`
 By default, this method checks if the response was returned successfully and parses the response into the result object. If the response had an error, it detects which type of HTTP error and throws the error result.
