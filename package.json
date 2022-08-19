@@ -1,6 +1,5 @@
 {
   "name": "@apollo/datasource-rest",
-  "private": true,
   "description": "REST DataSource for Apollo Server v4",
   "version": "4.1.0",
   "author": "Apollo <packages@apollographql.com>",
