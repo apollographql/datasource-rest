@@ -767,6 +767,9 @@ describe('RESTDataSource', () => {
       });
 
       it('allows setting a short TTL for the cache', async () => {
+        // nock depends on process.nextTick
+        jest.useFakeTimers({ doNotFake: ['nextTick'] });
+        
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
           override requestCacheEnabled = false;
@@ -786,11 +789,13 @@ describe('RESTDataSource', () => {
         nock(apiUrl).get('/foo/1').reply(200);
         await dataSource.getFoo(1);
 
-        // Sleep for a little to expire cache
-        await new Promise((r) => setTimeout(r, 2000));
+        // expire the cache (note: 999ms, just shy of the 1s ttl, will reliably fail this test)
+        jest.advanceTimersByTime(1000);        
 
         // Call a second time which should be invalid now
         await expect(dataSource.getFoo(1)).rejects.toThrow();
+
+        jest.useRealTimers();
       });
     });
   });
