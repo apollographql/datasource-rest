@@ -46,11 +46,6 @@ class MoviesAPI extends RESTDataSource {
 ### API Reference
 To see the all the properties and functions that can be overridden, the [source code](https://github.com/apollographql/apollo-server/tree/main/packages/apollo-datasource-rest) is always the best option.
 
-#### Constructor Parameters
-##### `httpFetch`
-
-Optional constructor option which allows overriding the `fetch` implementation used when calling data sources.
-
 #### Properties
 ##### `baseURL`
 Optional value to use for all the REST calls. If it is set in your class implementation, this base URL is used as the prefix for all calls. If it is not set, then the value passed to the REST call is exactly the value used.
@@ -71,10 +66,10 @@ class MoviesAPI extends RESTDataSource {
 ```
 
 ##### `requestCacheEnabled`
-By default, `RESTDataSource` caches all outgoing GET **requests** in a separate memoized cache from the regular response cache. It does this to prevent duplicate calls that might happen in rapid succession.
-If a request is made with the same cache key (URL by default) with an HTTP method other than GET, the cached request is then cleared.
+By default, `RESTDataSource` caches all outgoing GET **requests** in a separate memoized cache from the regular response cache. It makes the assumption that all responses from HTTP GET calls are cacheable by their URL.
+If a request is made with the same cache key (URL by default) but with an HTTP method other than GET, the cached request is then cleared.
 
-If you would like to disable the GET request cache, set the `requestCacheEnabled` property to `false`.
+If you would like to disable the GET request cache, set the `requestCacheEnabled` property to `false`. You might want to do this if your API is not actually cacheable or your data changes over time.
 
 ```js title="requestCacheEnabled.js"
 class MoviesAPI extends RESTDataSource {
