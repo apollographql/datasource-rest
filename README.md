@@ -73,18 +73,18 @@ If you would like to disable the GET request cache, set the `memoizeGetRequests`
 
 ```js title="memoizeGetRequests.js"
 class MoviesAPI extends RESTDataSource {
-    constructor() {
-        super();
-        // Defaults to true
-        this.memoizeGetRequests = false;
-    }
+  constructor() {
+    super();
+    // Defaults to true
+    this.memoizeGetRequests = false;
+  }
 
-    // Outgoing requests are never cached, however the response cache is still enabled
-    async getMovie(id) {
-        return this.get(
-            `https://movies-api.example.com/movies/${encodeURIComponent(id)}` // path
-        );
-    }
+  // Outgoing requests are never cached, however the response cache is still enabled
+  async getMovie(id) {
+    return this.get(
+      `https://movies-api.example.com/movies/${encodeURIComponent(id)}` // path
+    );
+  }
 }
 ```
 
@@ -103,9 +103,9 @@ Allows setting the `CacheOptions` to be used for each request/response in the HT
 
 ```javascript
 override cacheOptionsFor() {
-    return {
-        ttl: 1
-    }
+  return {
+    ttl: 1
+  }
 }
 ```
 
