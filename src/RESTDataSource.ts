@@ -58,7 +58,7 @@ export abstract class RESTDataSource {
   httpCache: HTTPCache;
   memoizedResults = new Map<string, Promise<any>>();
   baseURL?: string;
-  requestCacheEnabled: boolean = true;
+  memoizeGetRequests: boolean = true;
 
   constructor(config?: DataSourceConfig) {
     this.httpCache = new HTTPCache(config?.cache, config?.fetch);
@@ -260,7 +260,7 @@ export abstract class RESTDataSource {
 
     // Cache GET requests based on the calculated cache key
     // Disabling the request cache does not disable the response cache
-    if (this.requestCacheEnabled) {
+    if (this.memoizeGetRequests) {
       if (request.method === 'GET') {
         let promise = this.memoizedResults.get(cacheKey);
         if (promise) return promise;
