@@ -1,5 +1,11 @@
 # @apollo/datasource-rest
 
+## 4.3.0
+
+### Minor Changes
+
+- [#13](https://github.com/apollographql/datasource-rest/pull/13) [`adb7e81`](https://github.com/apollographql/datasource-rest/commit/adb7e81159bd99b40b1bdee273d0c9fe35547113) Thanks [@trevor-scheer](https://github.com/trevor-scheer)! - Official Apollo Server v4.0.0 support
+
 ## 4.2.0
 
 ### Minor Changes
