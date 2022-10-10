@@ -1,4 +1,5 @@
 import { ApolloServer } from '@apollo/server';
+import assert from 'assert';
 import { RESTDataSource } from '../RESTDataSource';
 
 const typeDefs = `#graphql
@@ -41,7 +42,7 @@ describe('Works with ApolloServer', () => {
     });
     await server.start();
 
-    const context: MyContext = {
+    const contextValue: MyContext = {
       dataSources: {
         foo: new FooDS(),
       },
@@ -53,10 +54,11 @@ describe('Works with ApolloServer', () => {
           mutation { createFoo }
         `,
       },
-      context,
+      { contextValue },
     );
 
+    assert(res.body.kind === 'single');
     expect(fooPosted).toBe(true);
-    expect(res.result.data?.createFoo).toBe(1);
+    expect(res.body.singleResult.data?.createFoo).toBe(1);
   });
 });
