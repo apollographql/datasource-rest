@@ -31,7 +31,7 @@
     "watch": "tsc --build --watch"
   },
   "devDependencies": {
-    "@apollo/server": "4.0.0-rc.17",
+    "@apollo/server": "4.0.0",
     "@apollo/utils.withrequired": "1.0.0",
     "@changesets/changelog-github": "0.4.7",
     "@changesets/cli": "2.25.0",
