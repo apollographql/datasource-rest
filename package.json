@@ -52,7 +52,7 @@
     "@apollo/utils.fetcher": "^1.0.0",
     "@apollo/utils.keyvaluecache": "1.0.1",
     "http-cache-semantics": "^4.1.0",
-    "node-fetch": "^2.6.7"
+    "node-fetch": "^3.0.0"
   },
   "peerDependencies": {
     "graphql": "^16.5.0"
