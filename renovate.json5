@@ -25,5 +25,10 @@
       "matchPackageNames": ["@types/node"],
       "allowedVersions": "14.x"
     },
+    // v3 is ESM only
+    {
+      "matchPackageNames": ["node-fetch"],
+      "allowedVersions": "2.x"
+    },
   ],
 }
