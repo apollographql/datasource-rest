@@ -1,5 +1,11 @@
 # @apollo/datasource-rest
 
+## 4.3.1
+
+### Patch Changes
+
+- [#54](https://github.com/apollographql/datasource-rest/pull/54) [`aa0fa97`](https://github.com/apollographql/datasource-rest/commit/aa0fa97eb50762e5410c7c6f2a3d2bc6c4f1f956) Thanks [@trevor-scheer](https://github.com/trevor-scheer)! - Fix installation into non-TS repositories
+
 ## 4.3.0
 
 ### Minor Changes
