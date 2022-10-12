@@ -1,5 +1,11 @@
 # @apollo/datasource-rest
 
+## 4.3.2
+
+### Patch Changes
+
+- [#57](https://github.com/apollographql/datasource-rest/pull/57) [`946d79e`](https://github.com/apollographql/datasource-rest/commit/946d79e07918858918403c81efd1f8dff9dec028) Thanks [@trevor-scheer](https://github.com/trevor-scheer)! - Fix build process (again), ensure built directory exists before publish
+
 ## 4.3.1
 
 ### Patch Changes
