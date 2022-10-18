@@ -8,7 +8,6 @@
     "group:jestPlusTSJest",
     "group:jestPlusTypes",
   ],
-  "schedule": null,
   "prCreation": "immediate",
   "packageRules": [
     // Bunch up all non-major dependencies into a single PR.  In the common case
