@@ -4,6 +4,9 @@
     // Our default configuration. See
     // https://github.com/apollographql/renovate-config-apollo-open-source/blob/master/package.json
     "apollo-open-source",
+    "group:jestMonorepo",
+    "group:jestPlusTSJest",
+    "group:jestPlusTypes",
   ],
   "schedule": null,
   "prCreation": "immediate",
