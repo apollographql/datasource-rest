@@ -6,6 +6,7 @@ import {
   ForbiddenError,
   RequestOptions,
   RESTDataSource,
+  WillSendRequestOptions,
   // RequestOptions
 } from '../RESTDataSource';
 
@@ -95,7 +96,12 @@ describe('RESTDataSource', () => {
 
         getPostsForUser(
           username: string,
-          params: { filter: string; limit: number; offset: number },
+          params: {
+            filter: string;
+            limit: number;
+            offset: number;
+            optional?: string;
+          },
         ) {
           return this.get('posts', {
             params: {
@@ -103,7 +109,15 @@ describe('RESTDataSource', () => {
               filter: params.filter,
               limit: params.limit.toString(),
               offset: params.offset.toString(),
+              // In the test, this is undefined and should not end up in the URL.
+              optional: params.optional,
             },
+          });
+        }
+
+        getPostsWithURLSearchParams(username: string) {
+          return this.get('posts2', {
+            params: new URLSearchParams([['username', username]]),
           });
         }
       })();
@@ -118,11 +132,19 @@ describe('RESTDataSource', () => {
         })
         .reply(200);
 
+      nock(apiUrl)
+        .get('/posts2')
+        .query({
+          username: 'beyoncé',
+        })
+        .reply(200);
+
       await dataSource.getPostsForUser('beyoncé', {
         filter: 'jalapeño',
         limit: 10,
         offset: 20,
       });
+      await dataSource.getPostsWithURLSearchParams('beyoncé');
     });
 
     it('allows setting default query string parameters', async () => {
@@ -133,10 +155,8 @@ describe('RESTDataSource', () => {
           super(config);
         }
 
-        override willSendRequest(request: RequestOptions) {
-          const params = new URLSearchParams(request.params);
-          params.set('apiKey', this.token);
-          request.params = params;
+        override willSendRequest(request: WillSendRequestOptions) {
+          request.params.set('apiKey', this.token);
         }
 
         getFoo(id: string) {
@@ -155,7 +175,7 @@ describe('RESTDataSource', () => {
       const dataSource = new (class extends RESTDataSource {
         override baseURL = 'https://api.example.com';
 
-        override willSendRequest(request: RequestOptions) {
+        override willSendRequest(request: WillSendRequestOptions) {
           request.headers = { ...request.headers, credentials: 'include' };
         }
 
@@ -177,7 +197,7 @@ describe('RESTDataSource', () => {
           super(config);
         }
 
-        override willSendRequest(request: RequestOptions) {
+        override willSendRequest(request: WillSendRequestOptions) {
           request.headers = { ...request.headers, authorization: this.token };
         }
 
