@@ -7,7 +7,7 @@ import type {
   FetcherResponse,
 } from '@apollo/utils.fetcher';
 import type { WithRequired } from '@apollo/utils.withrequired';
-import isObject from 'lodash.isobject';
+import isPlainObject from 'lodash.isplainobject';
 
 type ValueOrPromise<T> = T | Promise<T>;
 
@@ -314,7 +314,7 @@ export abstract class RESTDataSource {
     if (
       augmentedRequest.body &&
       !(augmentedRequest.body instanceof Buffer) &&
-      (isObject(augmentedRequest.body) ||
+      (isPlainObject(augmentedRequest.body) ||
         Array.isArray(augmentedRequest.body) ||
         ((augmentedRequest.body as any).toJSON &&
           typeof (augmentedRequest.body as any).toJSON === 'function'))
