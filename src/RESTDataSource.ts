@@ -1,45 +1,50 @@
-import { HTTPCache } from './HTTPCache';
-import { GraphQLError } from 'graphql';
-import type { KeyValueCache } from '@apollo/utils.keyvaluecache';
 import type {
   Fetcher,
   FetcherRequestInit,
   FetcherResponse,
 } from '@apollo/utils.fetcher';
+import type { KeyValueCache } from '@apollo/utils.keyvaluecache';
 import type { WithRequired } from '@apollo/utils.withrequired';
+import type FormData from 'form-data';
+import { GraphQLError } from 'graphql';
+import { HTTPCache } from './HTTPCache';
 
 type ValueOrPromise<T> = T | Promise<T>;
 
-export type RequestOptions = FetcherRequestInit & {
-  /**
-   * URL search parameters can be provided either as a record object (in which
-   * case keys with `undefined` values are ignored) or as an URLSearchParams
-   * object. If you want to specify a parameter multiple times, use
-   * URLSearchParams with its "array of two-element arrays" constructor form.
-   * (The URLSearchParams object is globally available in Node, and provided to
-   * TypeScript by @types/node.)
-   */
-  params?: Record<string, string | undefined> | URLSearchParams;
-  cacheOptions?:
-    | CacheOptions
-    | ((
-        url: string,
-        response: FetcherResponse,
-        request: RequestOptions,
-      ) => CacheOptions | undefined);
-};
+export type RequestOptions<TFormData extends FormData = FormData> =
+  FetcherRequestInit<TFormData> & {
+    /**
+     * URL search parameters can be provided either as a record object (in which
+     * case keys with `undefined` values are ignored) or as an URLSearchParams
+     * object. If you want to specify a parameter multiple times, use
+     * URLSearchParams with its "array of two-element arrays" constructor form.
+     * (The URLSearchParams object is globally available in Node, and provided to
+     * TypeScript by @types/node.)
+     */
+    params?: Record<string, string | undefined> | URLSearchParams;
+    cacheOptions?:
+      | CacheOptions
+      | ((
+          url: string,
+          response: FetcherResponse,
+          request: RequestOptions<TFormData>,
+        ) => CacheOptions | undefined);
+  };
 
 export interface GetRequest extends RequestOptions {
   method?: 'GET';
   body?: never;
 }
 
-export interface RequestWithBody extends Omit<RequestOptions, 'body'> {
+export interface RequestWithBody<TFormData extends FormData = FormData>
+  extends Omit<RequestOptions<TFormData>, 'body'> {
   method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-  body?: FetcherRequestInit['body'] | object;
+  body?: FetcherRequestInit<TFormData>['body'] | object;
 }
 
-type DataSourceRequest = GetRequest | RequestWithBody;
+type DataSourceRequest<TFormData extends FormData = FormData> =
+  | GetRequest
+  | RequestWithBody<TFormData>;
 
 // While tempting, this union can't be reduced / factored out to just
 // Omit<WithRequired<GetRequest | RequestWithBody, 'headers'>, 'params'> & { params: URLSearchParams }
@@ -49,9 +54,9 @@ type DataSourceRequest = GetRequest | RequestWithBody;
  * hooks to ensure that headers and params are always present, even if they're
  * empty.
  */
-export type AugmentedRequest = (
+export type AugmentedRequest<TFormData extends FormData = FormData> = (
   | Omit<WithRequired<GetRequest, 'headers'>, 'params'>
-  | Omit<WithRequired<RequestWithBody, 'headers'>, 'params'>
+  | Omit<WithRequired<RequestWithBody<TFormData>, 'headers'>, 'params'>
 ) & {
   params: URLSearchParams;
 };
@@ -62,9 +67,9 @@ export interface CacheOptions {
 
 const NODE_ENV = process.env.NODE_ENV;
 
-export interface DataSourceConfig {
+export interface DataSourceConfig<TFormData extends FormData = FormData> {
   cache?: KeyValueCache;
-  fetch?: Fetcher;
+  fetch?: Fetcher<TFormData>;
 }
 
 // RESTDataSource has two layers of caching. The first layer is purely in-memory
@@ -96,13 +101,13 @@ export type RequestDeduplicationPolicy =
   // the deduplication store.)
   | { policy: 'do-not-deduplicate'; invalidateDeduplicationKeys?: string[] };
 
-export abstract class RESTDataSource {
-  httpCache: HTTPCache;
+export abstract class RESTDataSource<TFormData extends FormData = FormData> {
+  httpCache: HTTPCache<TFormData>;
   protected deduplicationPromises = new Map<string, Promise<any>>();
   baseURL?: string;
 
   constructor(config?: DataSourceConfig) {
-    this.httpCache = new HTTPCache(config?.cache, config?.fetch);
+    this.httpCache = new HTTPCache<TFormData>(config?.cache, config?.fetch);
   }
 
   // By default, we use the full request URL as the cache key.
@@ -110,7 +115,7 @@ export abstract class RESTDataSource {
   // For example, you could use this to take Vary header fields into account.
   // Although we do validate header fields and don't serve responses from cache when they don't match,
   // new responses overwrite old ones with different vary header fields.
-  protected cacheKeyFor(url: URL, _request: RequestOptions): string {
+  protected cacheKeyFor(url: URL, _request: RequestOptions<TFormData>): string {
     return url.toString();
   }
 
@@ -132,7 +137,7 @@ export abstract class RESTDataSource {
    */
   protected requestDeduplicationPolicyFor(
     url: URL,
-    request: RequestOptions,
+    request: RequestOptions<TFormData>,
   ): RequestDeduplicationPolicy {
     // Start with the cache key that is used for the shared header-sensitive
     // cache. Note that its default implementation does not include the HTTP
@@ -159,12 +164,12 @@ export abstract class RESTDataSource {
 
   protected willSendRequest?(
     path: string,
-    requestOpts: AugmentedRequest,
+    requestOpts: AugmentedRequest<TFormData>,
   ): ValueOrPromise<void>;
 
   protected resolveURL(
     path: string,
-    _request: AugmentedRequest,
+    _request: AugmentedRequest<TFormData>,
   ): ValueOrPromise<URL> {
     return new URL(path, this.baseURL);
   }
@@ -172,12 +177,12 @@ export abstract class RESTDataSource {
   protected cacheOptionsFor?(
     url: string,
     response: FetcherResponse,
-    request: FetcherRequestInit,
+    request: FetcherRequestInit<TFormData>,
   ): CacheOptions | undefined;
 
   protected async didReceiveResponse<TResult = any>(
     response: FetcherResponse,
-    _request: RequestOptions,
+    _request: RequestOptions<TFormData>,
   ): Promise<TResult> {
     if (response.ok) {
       return this.parseBody(response) as any as Promise<TResult>;
@@ -186,7 +191,10 @@ export abstract class RESTDataSource {
     }
   }
 
-  protected didEncounterError(error: Error, _request: RequestOptions) {
+  protected didEncounterError(
+    error: Error,
+    _request: RequestOptions<TFormData>,
+  ) {
     throw error;
   }
 
@@ -243,28 +251,28 @@ export abstract class RESTDataSource {
 
   protected async post<TResult = any>(
     path: string,
-    request?: RequestWithBody,
+    request?: RequestWithBody<TFormData>,
   ): Promise<TResult> {
     return this.fetch<TResult>(path, { method: 'POST', ...request });
   }
 
   protected async patch<TResult = any>(
     path: string,
-    request?: RequestWithBody,
+    request?: RequestWithBody<TFormData>,
   ): Promise<TResult> {
     return this.fetch<TResult>(path, { method: 'PATCH', ...request });
   }
 
   protected async put<TResult = any>(
     path: string,
-    request?: RequestWithBody,
+    request?: RequestWithBody<TFormData>,
   ): Promise<TResult> {
     return this.fetch<TResult>(path, { method: 'PUT', ...request });
   }
 
   protected async delete<TResult = any>(
     path: string,
-    request?: RequestWithBody,
+    request?: RequestWithBody<TFormData>,
   ): Promise<TResult> {
     return this.fetch<TResult>(path, { method: 'DELETE', ...request });
   }
@@ -285,9 +293,9 @@ export abstract class RESTDataSource {
 
   private async fetch<TResult>(
     path: string,
-    incomingRequest: DataSourceRequest,
+    incomingRequest: DataSourceRequest<TFormData>,
   ): Promise<TResult> {
-    const augmentedRequest: AugmentedRequest = {
+    const augmentedRequest: AugmentedRequest<TFormData> = {
       ...incomingRequest,
       // guarantee params and headers objects before calling `willSendRequest` for convenience
       params:
@@ -310,14 +318,7 @@ export abstract class RESTDataSource {
 
     // We accept arbitrary objects and arrays as body and serialize them as JSON.
     // `string`, `Buffer`, and `undefined` are passed through up above as-is.
-    if (
-      augmentedRequest.body != null &&
-      !(augmentedRequest.body instanceof Buffer) &&
-      (augmentedRequest.body.constructor === Object ||
-        Array.isArray(augmentedRequest.body) ||
-        ((augmentedRequest.body as any).toJSON &&
-          typeof (augmentedRequest.body as any).toJSON === 'function'))
-    ) {
+    if (this.shouldStringify(augmentedRequest.body)) {
       augmentedRequest.body = JSON.stringify(augmentedRequest.body);
       // If Content-Type header has not been previously set, set to application/json
       if (!augmentedRequest.headers) {
@@ -329,11 +330,12 @@ export abstract class RESTDataSource {
 
     // At this point we know the `body` is a `string`, `Buffer`, or `undefined`
     // (not possibly an `object`).
-    const outgoingRequest = augmentedRequest as RequestOptions;
+    const outgoingRequest = augmentedRequest as RequestOptions<TFormData>;
+
+    const cacheKey = this.cacheKeyFor(url, outgoingRequest);
 
     const performRequest = async () => {
       return this.trace(url, outgoingRequest, async () => {
-        const cacheKey = this.cacheKeyFor(url, outgoingRequest);
         const cacheOptions = outgoingRequest.cacheOptions
           ? outgoingRequest.cacheOptions
           : this.cacheOptionsFor?.bind(this);
@@ -386,9 +388,20 @@ export abstract class RESTDataSource {
     }
   }
 
+  private shouldStringify(
+    body: string | Buffer | TFormData | undefined | object,
+  ) {
+    return (
+      body != null &&
+      typeof body !== 'string' &&
+      !(body instanceof Buffer) &&
+      body.constructor.name !== 'FormData'
+    );
+  }
+
   protected async trace<TResult>(
     url: URL,
-    request: RequestOptions,
+    request: RequestOptions<TFormData>,
     fn: () => Promise<TResult>,
   ): Promise<TResult> {
     if (NODE_ENV === 'development') {

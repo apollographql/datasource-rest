@@ -1,4 +1,5 @@
 import fetch, { Response } from 'node-fetch';
+import type FormData from 'form-data';
 import CachePolicy from 'http-cache-semantics';
 import type {
   Fetcher,
@@ -12,13 +13,13 @@ import {
 } from '@apollo/utils.keyvaluecache';
 import type { CacheOptions, RequestOptions } from './RESTDataSource';
 
-export class HTTPCache {
+export class HTTPCache<TFormData extends FormData = FormData> {
   private keyValueCache: KeyValueCache;
-  private httpFetch: Fetcher;
+  private httpFetch: Fetcher<TFormData>;
 
   constructor(
     keyValueCache: KeyValueCache = new InMemoryLRUCache(),
-    httpFetch: Fetcher = fetch,
+    httpFetch: Fetcher<TFormData> = fetch,
   ) {
     this.keyValueCache = new PrefixingKeyValueCache(
       keyValueCache,
@@ -29,7 +30,7 @@ export class HTTPCache {
 
   async fetch(
     url: URL,
-    requestOpts: FetcherRequestInit = {},
+    requestOpts: FetcherRequestInit<TFormData> = {},
     cache?: {
       cacheKey?: string;
       cacheOptions?:
@@ -37,7 +38,7 @@ export class HTTPCache {
         | ((
             url: string,
             response: FetcherResponse,
-            request: RequestOptions,
+            request: RequestOptions<TFormData>,
           ) => CacheOptions | undefined);
     },
   ): Promise<FetcherResponse> {
@@ -50,8 +51,8 @@ export class HTTPCache {
       const response = await this.httpFetch(urlString, requestOpts);
 
       const policy = new CachePolicy(
-        policyRequestFrom(urlString, requestOpts),
-        policyResponseFrom(response),
+        this.policyRequestFrom(urlString, requestOpts),
+        this.policyResponseFrom(response),
       );
 
       return this.storeResponseAndReturnClone(
@@ -74,7 +75,7 @@ export class HTTPCache {
       (ttlOverride && policy.age() < ttlOverride) ||
       (!ttlOverride &&
         policy.satisfiesWithoutRevalidation(
-          policyRequestFrom(urlString, requestOpts),
+          this.policyRequestFrom(urlString, requestOpts),
         ))
     ) {
       const headers = policy.responseHeaders();
@@ -85,9 +86,9 @@ export class HTTPCache {
       });
     } else {
       const revalidationHeaders = policy.revalidationHeaders(
-        policyRequestFrom(urlString, requestOpts),
+        this.policyRequestFrom(urlString, requestOpts),
       );
-      const revalidationRequest: RequestOptions = {
+      const revalidationRequest: RequestOptions<TFormData> = {
         ...requestOpts,
         headers: revalidationHeaders,
       };
@@ -97,8 +98,8 @@ export class HTTPCache {
       );
 
       const { policy: revalidatedPolicy, modified } = policy.revalidatedPolicy(
-        policyRequestFrom(urlString, revalidationRequest),
-        policyResponseFrom(revalidationResponse),
+        this.policyRequestFrom(urlString, revalidationRequest),
+        this.policyResponseFrom(revalidationResponse),
       );
 
       return this.storeResponseAndReturnClone(
@@ -119,7 +120,7 @@ export class HTTPCache {
   private async storeResponseAndReturnClone(
     url: string,
     response: FetcherResponse,
-    request: RequestOptions,
+    request: RequestOptions<TFormData>,
     policy: CachePolicy,
     cacheKey: string,
     cacheOptions?:
@@ -127,7 +128,7 @@ export class HTTPCache {
       | ((
           url: string,
           response: FetcherResponse,
-          request: RequestOptions,
+          request: RequestOptions<TFormData>,
         ) => CacheOptions | undefined),
   ): Promise<FetcherResponse> {
     if (typeof cacheOptions === 'function') {
@@ -153,7 +154,7 @@ export class HTTPCache {
 
     // If a response can be revalidated, we don't want to remove it from the cache right after it expires.
     // We may be able to use better heuristics here, but for now we'll take the max-age times 2.
-    if (canBeRevalidated(response)) {
+    if (this.canBeRevalidated(response)) {
       ttl *= 2;
     }
 
@@ -179,23 +180,23 @@ export class HTTPCache {
       headers: Object.fromEntries(response.headers),
     });
   }
-}
 
-function canBeRevalidated(response: FetcherResponse): boolean {
-  return response.headers.has('ETag');
-}
+  private policyRequestFrom(url: string, request: RequestOptions<TFormData>) {
+    return {
+      url,
+      method: request.method ?? 'GET',
+      headers: request.headers ?? {},
+    };
+  }
 
-function policyRequestFrom(url: string, request: RequestOptions) {
-  return {
-    url,
-    method: request.method ?? 'GET',
-    headers: request.headers ?? {},
-  };
-}
+  private policyResponseFrom(response: FetcherResponse) {
+    return {
+      status: response.status,
+      headers: Object.fromEntries(response.headers),
+    };
+  }
 
-function policyResponseFrom(response: FetcherResponse) {
-  return {
-    status: response.status,
-    headers: Object.fromEntries(response.headers),
-  };
+  private canBeRevalidated(response: FetcherResponse): boolean {
+    return response.headers.has('ETag');
+  }
 }
