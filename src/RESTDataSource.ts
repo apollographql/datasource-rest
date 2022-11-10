@@ -29,12 +29,14 @@ export type RequestOptions = FetcherRequestInit & {
       ) => CacheOptions | undefined);
 };
 
-export type WillSendRequestOptions = Omit<
+type ModifiedRequest = Omit<
   WithRequired<RequestOptions, 'headers'>,
   'params'
 > & {
   params: URLSearchParams;
 };
+
+export type WillSendRequestOptions = ModifiedRequest;
 
 export interface GetRequest extends RequestOptions {
   method?: 'GET';
@@ -207,7 +209,7 @@ export abstract class RESTDataSource {
     path: string,
     request: DataSourceRequest,
   ): Promise<TResult> {
-    const modifiedRequest: WillSendRequestOptions = {
+    const modifiedRequest: ModifiedRequest = {
       ...request,
       // guarantee params and headers objects before calling `willSendRequest` for convenience
       params:
@@ -217,17 +219,6 @@ export abstract class RESTDataSource {
       headers: request.headers ?? Object.create(null),
       body: undefined,
     };
-
-    if (this.willSendRequest) {
-      await this.willSendRequest(modifiedRequest);
-    }
-
-    const url = await this.resolveURL(path, modifiedRequest);
-
-    // Append params from the request to any existing params in the path
-    for (const [name, value] of modifiedRequest.params as URLSearchParams) {
-      url.searchParams.append(name, value);
-    }
 
     // We accept arbitrary objects and arrays as body and serialize them as JSON
     if (
@@ -245,6 +236,17 @@ export abstract class RESTDataSource {
       } else if (!modifiedRequest.headers['content-type']) {
         modifiedRequest.headers['content-type'] = 'application/json';
       }
+    }
+
+    if (this.willSendRequest) {
+      await this.willSendRequest(modifiedRequest);
+    }
+
+    const url = await this.resolveURL(path, modifiedRequest);
+
+    // Append params to existing params in the path
+    for (const [name, value] of modifiedRequest.params as URLSearchParams) {
+      url.searchParams.append(name, value);
     }
 
     const cacheKey = this.cacheKeyFor(url, modifiedRequest);

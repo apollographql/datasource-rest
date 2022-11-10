@@ -866,8 +866,10 @@ describe('RESTDataSource', () => {
             ) {
               expect(requestOpts).toMatchInlineSnapshot(`
                 {
-                  "body": undefined,
-                  "headers": {},
+                  "body": "{"name":"blah"}",
+                  "headers": {
+                    "content-type": "application/json",
+                  },
                   "method": "POST",
                   "params": URLSearchParams {
                     Symbol(query): [],
@@ -875,6 +877,40 @@ describe('RESTDataSource', () => {
                   },
                 }
               `);
+            }
+          })();
+
+          nock(apiUrl)
+            .post('/foo/1', JSON.stringify({ name: 'blah' }))
+            .reply(200);
+          await dataSource.updateFoo(1, { name: 'blah' });
+        });
+      });
+
+      describe('resolveURL', () => {
+        it('sees the same request body used by outgoing fetch', async () => {
+          const dataSource = new (class extends RESTDataSource {
+            override baseURL = apiUrl;
+
+            updateFoo(id: number, foo: { name: string }) {
+              return this.post(`foo/${id}`, { body: foo });
+            }
+
+            override resolveURL(path: string, requestOpts: RequestOptions) {
+              expect(requestOpts).toMatchInlineSnapshot(`
+                {
+                  "body": "{"name":"blah"}",
+                  "headers": {
+                    "content-type": "application/json",
+                  },
+                  "method": "POST",
+                  "params": URLSearchParams {
+                    Symbol(query): [],
+                    Symbol(context): null,
+                  },
+                }
+              `);
+              return super.resolveURL(path, requestOpts);
             }
           })();
 
