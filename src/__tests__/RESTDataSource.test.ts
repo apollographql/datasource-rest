@@ -322,7 +322,7 @@ describe('RESTDataSource', () => {
       await dataSource.postFoo(model);
     });
 
-    it('does not serialize a request body that is not an object', async () => {
+    fit('does not serialize a request body that is not an object', async () => {
       const dataSource = new (class extends RESTDataSource {
         override baseURL = 'https://api.example.com';
 
@@ -333,8 +333,14 @@ describe('RESTDataSource', () => {
 
       class FormData {}
       const form = new FormData();
+      expect(typeof form).toMatchInlineSnapshot(`"object"`);
 
-      nock(apiUrl).post('/foo').reply(200);
+      nock(apiUrl)
+        .post('/foo', (body) => {
+          expect(body).toMatchInlineSnapshot(`{}`);
+          return !body;
+        })
+        .reply(200);
 
       await dataSource.postFoo(form);
     });
