@@ -7,6 +7,7 @@ import type {
   FetcherResponse,
 } from '@apollo/utils.fetcher';
 import type { WithRequired } from '@apollo/utils.withrequired';
+import isObject from 'lodash.isobject';
 
 type ValueOrPromise<T> = T | Promise<T>;
 
@@ -311,9 +312,9 @@ export abstract class RESTDataSource {
     // We accept arbitrary objects and arrays as body and serialize them as JSON.
     // `string`, `Buffer`, and `undefined` are passed through up above as-is.
     if (
-      augmentedRequest.body != null &&
+      augmentedRequest.body &&
       !(augmentedRequest.body instanceof Buffer) &&
-      (augmentedRequest.body.constructor === Object ||
+      (isObject(augmentedRequest.body) ||
         Array.isArray(augmentedRequest.body) ||
         ((augmentedRequest.body as any).toJSON &&
           typeof (augmentedRequest.body as any).toJSON === 'function'))
