@@ -382,6 +382,26 @@ describe('RESTDataSource', () => {
       await dataSource.updateFoo(1, Buffer.from(expectedData));
     });
 
+    it('serializes a request body that is an object with a null prototype', async () => {
+      interface Foo {
+        hello: string;
+      }
+      const dataSource = new (class extends RESTDataSource {
+        override baseURL = 'https://api.example.com';
+
+        postFoo(foo: Foo) {
+          return this.post('foo', { body: foo });
+        }
+      })();
+
+      const foo: Foo = Object.create(null);
+      foo.hello = 'world';
+
+      nock(apiUrl).post('/foo', { hello: 'world' }).reply(200);
+
+      await dataSource.postFoo(foo);
+    });
+
     describe('all methods', () => {
       const dataSource = new (class extends RESTDataSource {
         override baseURL = 'https://api.example.com';
