@@ -1,4 +1,3 @@
-// import fetch, { Request } from 'node-fetch';
 import {
   AuthenticationError,
   CacheOptions,
@@ -7,11 +6,12 @@ import {
   RequestOptions,
   RESTDataSource,
   WillSendRequestOptions,
+<<<<<<< HEAD
   // RequestOptions
+=======
+>>>>>>> e01adcb (Test demonstrating bad behavior)
 } from '../RESTDataSource';
 
-// import { HTTPCache } from '../HTTPCache';
-// import { MapKeyValueCache } from './MapKeyValueCache';
 import { nockAfterEach, nockBeforeEach } from './nockAssertions';
 import nock from 'nock';
 import { GraphQLError } from 'graphql';
@@ -19,13 +19,7 @@ import { GraphQLError } from 'graphql';
 const apiUrl = 'https://api.example.com';
 
 describe('RESTDataSource', () => {
-  // let httpCache: HTTPCache;
-
-  beforeEach(() => {
-    nockBeforeEach();
-    // httpCache = new HTTPCache(new MapKeyValueCache<string>());
-  });
-
+  beforeEach(nockBeforeEach);
   afterEach(nockAfterEach);
 
   describe('constructing requests', () => {
@@ -266,18 +260,6 @@ describe('RESTDataSource', () => {
 
       await dataSource.getFoo('1');
     });
-
-    //   function expectJSONFetch(url: string, bodyJSON: unknown) {
-    //     expect(fetch).toBeCalledTimes(1);
-    //     const request = fetch.mock.calls[0][0] as Request;
-    //     expect(request.url).toEqual(url);
-    //     // request.body is a node-fetch extension which we aren't properly
-    //     // capturing in our TS types.
-    //     expect((request as any).body.toString()).toEqual(
-    //       JSON.stringify(bodyJSON),
-    //     );
-    //     expect(request.headers.get('Content-Type')).toEqual('application/json');
-    //   }
 
     it('serializes a request body that is an object as JSON', async () => {
       const expectedFoo = { foo: 'bar' };
@@ -866,6 +848,41 @@ describe('RESTDataSource', () => {
         await expect(dataSource.getFoo(1)).rejects.toThrow();
 
         jest.useRealTimers();
+      });
+    });
+
+    describe('user hooks', () => {
+      describe('willSendRequest', () => {
+        it('sees the same request body used by outgoing fetch', async () => {
+          const dataSource = new (class extends RESTDataSource {
+            override baseURL = apiUrl;
+
+            updateFoo(id: number, foo: { name: string }) {
+              return this.post(`foo/${id}`, { body: foo });
+            }
+
+            override async willSendRequest(
+              requestOpts: WillSendRequestOptions,
+            ) {
+              expect(requestOpts).toMatchInlineSnapshot(`
+                {
+                  "body": undefined,
+                  "headers": {},
+                  "method": "POST",
+                  "params": URLSearchParams {
+                    Symbol(query): [],
+                    Symbol(context): null,
+                  },
+                }
+              `);
+            }
+          })();
+
+          nock(apiUrl)
+            .post('/foo/1', JSON.stringify({ name: 'blah' }))
+            .reply(200);
+          await dataSource.updateFoo(1, { name: 'blah' });
+        });
       });
     });
   });
