@@ -9,7 +9,9 @@ circleci
 codesandbox
 datasource
 direnv
+falsey
 httpcache
+isplainobject
 keyvaluecache
 opde
 revalidates
