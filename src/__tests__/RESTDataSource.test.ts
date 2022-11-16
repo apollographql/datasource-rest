@@ -342,6 +342,27 @@ describe('RESTDataSource', () => {
       await dataSource.postFoo(form);
     });
 
+    it('does not serialize (but does include) string request bodies', async () => {
+      const dataSource = new (class extends RESTDataSource {
+        override baseURL = 'https://api.example.com';
+
+        updateFoo(id: number, urlEncodedFoo: string) {
+          return this.post(`foo/${id}`, {
+            headers: { 'content-type': 'application/x-www-urlencoded' },
+            body: urlEncodedFoo,
+          });
+        }
+      })();
+
+      nock(apiUrl)
+        .post('/foo/1', (body) => {
+          return body === "id=1&name=bar";
+        })
+        .reply(200, 'ok', { 'content-type': 'text/plain' });
+
+      await dataSource.updateFoo(1, 'id=1&name=bar');
+    });
+
     describe('all methods', () => {
       const dataSource = new (class extends RESTDataSource {
         override baseURL = 'https://api.example.com';
