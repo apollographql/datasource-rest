@@ -236,6 +236,8 @@ export abstract class RESTDataSource {
       } else if (!modifiedRequest.headers['content-type']) {
         modifiedRequest.headers['content-type'] = 'application/json';
       }
+    } else if (typeof request.body === 'string') {
+      modifiedRequest.body = request.body;
     }
 
     if (this.willSendRequest) {

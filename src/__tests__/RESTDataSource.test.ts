@@ -356,7 +356,7 @@ describe('RESTDataSource', () => {
 
       nock(apiUrl)
         .post('/foo/1', (body) => {
-          return body === "id=1&name=bar";
+          return body === 'id=1&name=bar';
         })
         .reply(200, 'ok', { 'content-type': 'text/plain' });
 
