@@ -10,11 +10,16 @@ import type { WithRequired } from '@apollo/utils.withrequired';
 
 type ValueOrPromise<T> = T | Promise<T>;
 
-// URLSearchParams is globally available in Node / coming from @types/node
-type URLSearchParamsInit = ConstructorParameters<typeof URLSearchParams>[0];
-
 export type RequestOptions = FetcherRequestInit & {
-  params?: URLSearchParamsInit;
+  /**
+   * URL search parameters can be provided either as a record object (in which
+   * case keys with `undefined` values are ignored) or as an URLSearchParams
+   * object. If you want to specify a parameter multiple times, use
+   * URLSearchParams with its "array of two-element arrays" constructor form.
+   * (The URLSearchParams object is globally available in Node, and provided to
+   * TypeScript by @types/node.)
+   */
+  params?: Record<string, string | undefined> | URLSearchParams;
   cacheOptions?:
     | CacheOptions
     | ((
@@ -195,6 +200,20 @@ export abstract class RESTDataSource {
     return this.fetch<TResult>(path, { method: 'DELETE', ...request });
   }
 
+  private urlSearchParamsFromRecord(
+    params: Record<string, string | undefined> | undefined,
+  ): URLSearchParams {
+    const usp = new URLSearchParams();
+    if (params) {
+      for (const [name, value] of Object.entries(params)) {
+        if (value !== undefined && value !== null) {
+          usp.set(name, value);
+        }
+      }
+    }
+    return usp;
+  }
+
   private async fetch<TResult>(
     path: string,
     request: DataSourceRequest,
@@ -205,7 +224,7 @@ export abstract class RESTDataSource {
       params:
         request.params instanceof URLSearchParams
           ? request.params
-          : new URLSearchParams(request.params),
+          : this.urlSearchParamsFromRecord(request.params),
       headers: request.headers ?? Object.create(null),
       body: undefined,
     };
@@ -216,7 +235,7 @@ export abstract class RESTDataSource {
 
     const url = await this.resolveURL(path, modifiedRequest);
 
-    // Append params to existing params in the path
+    // Append params from the request to any existing params in the path
     for (const [name, value] of modifiedRequest.params as URLSearchParams) {
       url.searchParams.append(name, value);
     }
