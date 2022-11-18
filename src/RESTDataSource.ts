@@ -86,18 +86,7 @@ export abstract class RESTDataSource {
     path: string,
     _request: RequestOptions,
   ): ValueOrPromise<URL> {
-    if (path.startsWith('/')) {
-      path = path.slice(1);
-    }
-    const baseURL = this.baseURL;
-    if (baseURL) {
-      const normalizedBaseURL = baseURL.endsWith('/')
-        ? baseURL
-        : baseURL.concat('/');
-      return new URL(path, normalizedBaseURL);
-    } else {
-      return new URL(path);
-    }
+    return new URL(path, this.baseURL);
   }
 
   protected cacheOptionsFor?(

@@ -65,6 +65,13 @@ class MoviesAPI extends RESTDataSource {
 }
 ```
 
+`RESTDataSource` interprets the string passed to methods such as `this.get()` as an URL in exactly the same way that a browser interprets a link on a web page whose address is the same as `this.baseURL`. This may lead to slightly surprising behavior if `this.baseURL` has a non-empty path component:
+
+- If the string passed to a method such as `this.get()` starts with a slash, then it is resolved relative to the *host* of the base URL, not to the full base URL. That is, if `this.baseURL` is `https://foo.com/a/b/c/`, then `this.get('d')` resolves to `https://foo.com/a/b/c/d`, but `this.get('/d')` resolves to `https://foo.com/d`.
+- If the base URL has a path element and does not end in a slash, then the given path replaces the last element of the path. That is, if `baseURL` is `https://foo.com/a/b/c`, `this.get('d')` resolves to `https://foo.com/a/b/d`
+
+In practice, this means that you should usually set `this.baseURL` to the common prefix of all URLs you want to access *including a trailing slash*, and you should pass paths *without a leading slash* to methods such as `this.get()`. If a resource's path starts with something that looks like an URL because it contains a colon, you can pass a path starting with `./`, like `this.get('./foo:bar')`.
+
 ##### `memoizeGetRequests`
 By default, `RESTDataSource` caches all outgoing GET **requests** in a separate memoized cache from the regular response cache. It makes the assumption that all responses from HTTP GET calls are cacheable by their URL.
 If a request is made with the same cache key (URL by default) but with an HTTP method other than GET, the cached request is then cleared.
