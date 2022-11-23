@@ -31,7 +31,7 @@
     "watch": "tsc --build --watch"
   },
   "devDependencies": {
-    "@apollo/server": "4.2.0",
+    "@apollo/server": "4.2.1",
     "@apollo/utils.withrequired": "1.0.1",
     "@changesets/changelog-github": "0.4.7",
     "@changesets/cli": "2.25.2",
@@ -50,7 +50,7 @@
   },
   "dependencies": {
     "@apollo/utils.fetcher": "^1.0.0",
-    "@apollo/utils.keyvaluecache": "1.0.1",
+    "@apollo/utils.keyvaluecache": "1.0.2",
     "http-cache-semantics": "^4.1.0",
     "node-fetch": "^2.6.7"
   },
