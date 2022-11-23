@@ -3,6 +3,7 @@ import {
   AuthenticationError,
   CacheOptions,
   DataSourceConfig,
+  DeduplicationPolicy,
   ForbiddenError,
   RequestOptions,
   RESTDataSource,
@@ -584,8 +585,8 @@ describe('RESTDataSource', () => {
       });
     });
 
-    describe('memoization/request cache', () => {
-      it('de-duplicates requests with the same cache key', async () => {
+    describe('deduplication', () => {
+      it('de-duplicates simultaneous requests with the same cache key', async () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
 
@@ -597,6 +598,47 @@ describe('RESTDataSource', () => {
         nock(apiUrl).get('/foo/1').reply(200);
 
         await Promise.all([dataSource.getFoo(1), dataSource.getFoo(1)]);
+      });
+
+      it('does not de-duplicate sequential requests with the same cache key', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          getFoo(id: number) {
+            return this.get(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(200);
+        nock(apiUrl).get('/foo/1').reply(200);
+        await dataSource.getFoo(1);
+        await dataSource.getFoo(1);
+      });
+
+      it('de-duplicates sequential requests with the same cache key with policy deduplicate-until-invalidated', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+          protected override deduplicationPolicyFor(
+            url: URL,
+            request: RequestOptions,
+          ): DeduplicationPolicy {
+            const p = super.deduplicationPolicyFor(url, request);
+            return p.policy === 'deduplicate-during-request-lifetime'
+              ? {
+                  policy: 'deduplicate-until-invalidated',
+                  deduplicationKey: p.deduplicationKey,
+                }
+              : p;
+          }
+
+          getFoo(id: number) {
+            return this.get(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(200);
+        await dataSource.getFoo(1);
+        await dataSource.getFoo(1);
       });
 
       it('does not deduplicate requests with a different cache key', async () => {
@@ -614,7 +656,7 @@ describe('RESTDataSource', () => {
         await Promise.all([dataSource.getFoo(1), dataSource.getFoo(2)]);
       });
 
-      it('does not deduplicate non-GET requests', async () => {
+      it('does not deduplicate non-GET requests by default', async () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
 
@@ -629,7 +671,7 @@ describe('RESTDataSource', () => {
         await Promise.all([dataSource.postFoo(1), dataSource.postFoo(1)]);
       });
 
-      it('non-GET request removes memoized request with the same cache key', async () => {
+      it('non-GET request invalidates deduplication of request with the same cache key', async () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
 
@@ -651,6 +693,40 @@ describe('RESTDataSource', () => {
           dataSource.postFoo(1),
           dataSource.getFoo(1),
         ]);
+      });
+
+      it('non-GET request invalidates deduplication of request with the same cache key with deduplicate-until-invalidated', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+          protected override deduplicationPolicyFor(
+            url: URL,
+            request: RequestOptions,
+          ): DeduplicationPolicy {
+            const p = super.deduplicationPolicyFor(url, request);
+            return p.policy === 'deduplicate-during-request-lifetime'
+              ? {
+                  policy: 'deduplicate-until-invalidated',
+                  deduplicationKey: p.deduplicationKey,
+                }
+              : p;
+          }
+
+          getFoo(id: number) {
+            return this.get(`foo/${id}`);
+          }
+
+          postFoo(id: number) {
+            return this.post(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(200);
+        nock(apiUrl).post('/foo/1').reply(200);
+        nock(apiUrl).get('/foo/1').reply(200);
+
+        await dataSource.getFoo(1);
+        await dataSource.postFoo(1);
+        await dataSource.getFoo(1);
       });
 
       it('allows specifying a custom cache key', async () => {
@@ -678,10 +754,12 @@ describe('RESTDataSource', () => {
         ]);
       });
 
-      it('allows disabling the GET cache', async () => {
+      it('allows disabling deduplication', async () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
-          override memoizeGetRequests = false;
+          protected override deduplicationPolicyFor() {
+            return { policy: 'do-not-deduplicate' } as const;
+          }
 
           getFoo(id: number) {
             return this.get(`foo/${id}`);
@@ -836,7 +914,9 @@ describe('RESTDataSource', () => {
       it('allows setting cache options for each request', async () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
-          override memoizeGetRequests = false;
+          protected override deduplicationPolicyFor() {
+            return { policy: 'do-not-deduplicate' } as const;
+          }
 
           getFoo(id: number) {
             return this.get(`foo/${id}`);
@@ -863,7 +943,9 @@ describe('RESTDataSource', () => {
 
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
-          override memoizeGetRequests = false;
+          protected override deduplicationPolicyFor() {
+            return { policy: 'do-not-deduplicate' } as const;
+          }
 
           getFoo(id: number) {
             return this.get(`foo/${id}`);

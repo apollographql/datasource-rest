@@ -67,11 +67,39 @@ export interface DataSourceConfig {
   fetch?: Fetcher;
 }
 
+// RESTDataSource has two layers of caching. The first layer is purely in-memory
+// within a single RESTDataSource object and is called "deduplication". It is
+// primarily designed so that multiple identical GET requests started
+// concurrently can share one real HTTP GET; it does not observe HTTP response
+// headers. (The second layer uses a potentially shared KeyValueCache for
+// storage and does observe HTTP response headers.) To configure deduplication,
+// override deduplicationPolicyFor.
+export type DeduplicationPolicy =
+  // If a request with the same deduplication key is in progress, share its
+  // result. Otherwise, start a request, allow other requests to de-duplicate
+  // against it while it is running, and forget about it once the request returns
+  // successfully.
+  | { policy: 'deduplicate-during-request-lifetime'; deduplicationKey: string }
+  // If a request with the same deduplication key is in progress, share its
+  // result. Otherwise, start a request and allow other requests to de-duplicate
+  // against it while it is running. All future requests with policy
+  // `deduplicate-during-request-lifetime` or `deduplicate-until-invalidated`
+  // with the same `deduplicationKey` will share the same result until a request
+  // is started with policy `do-not-deduplicate` and a matching entry in
+  // `invalidateDeduplicationKeys`.
+  | { policy: 'deduplicate-until-invalidated'; deduplicationKey: string }
+  // Always run an actual HTTP request and don't allow other requests to
+  // de-duplicate against it. Additionally, invalidate any listed keys
+  // immediately: new requests with that deduplicationKey will not match any
+  // requests that current exist. (The invalidation feature is used so that
+  // doing (say) `DELETE /path` invalidates any result for `GET /path` within
+  // the deduplication store.)
+  | { policy: 'do-not-deduplicate'; invalidateDeduplicationKeys?: string[] };
+
 export abstract class RESTDataSource {
   httpCache: HTTPCache;
-  memoizedResults = new Map<string, Promise<any>>();
+  protected deduplicationPromises = new Map<string, Promise<any>>();
   baseURL?: string;
-  memoizeGetRequests: boolean = true;
 
   constructor(config?: DataSourceConfig) {
     this.httpCache = new HTTPCache(config?.cache, config?.fetch);
@@ -84,6 +112,49 @@ export abstract class RESTDataSource {
   // new responses overwrite old ones with different vary header fields.
   protected cacheKeyFor(url: URL, _request: RequestOptions): string {
     return url.toString();
+  }
+
+  /**
+   * Calculates the deduplication policy for the request.
+   *
+   * By default, GET requests have the policy
+   * `deduplicate-during-request-lifetime` with deduplication key `GET
+   * ${cacheKey}`, and all other requests have the policy `do-not-deduplicate`
+   * and invalidate `GET ${cacheKey}`, where `cacheKey` is the value returned by
+   * `cacheKeyFor` (and is the same cache key used in the HTTP-header-sensitive
+   * shared cache).
+   *
+   * Note that the default cache key only contains the URL (not the method,
+   * headers, body, etc), so if you send multiple GET requests that differ only
+   * in headers (etc), or if you change your policy to allow non-GET requests to
+   * be deduplicated, you may want to put more information into the cache key or
+   * be careful to keep the HTTP method in the deduplication key.
+   */
+  protected deduplicationPolicyFor(
+    url: URL,
+    request: RequestOptions,
+  ): DeduplicationPolicy {
+    // Start with the cache key that is used for the shared header-sensitive
+    // cache. Note that its default implementation does not include the HTTP
+    // method, so if a subclass overrides this and allows non-GETs to be
+    // de-duplicated it will be important for it to include (at least!) the
+    // method in the deduplication key, so we're explicitly adding GET here.
+    const cacheKey = this.cacheKeyFor(url, request);
+    if (request.method === 'GET') {
+      return {
+        policy: 'deduplicate-during-request-lifetime',
+        deduplicationKey: `${request.method} ${cacheKey}`,
+      };
+    } else {
+      return {
+        policy: 'do-not-deduplicate',
+        // Always invalidate GETs when a different method is seen on the same
+        // cache key (ie, URL), as per standard HTTP semantics. (We don't have
+        // to invalidate the key with this HTTP method because we never write
+        // it.)
+        invalidateDeduplicationKeys: [`GET ${cacheKey}`],
+      };
+    }
   }
 
   protected willSendRequest?(
@@ -260,10 +331,9 @@ export abstract class RESTDataSource {
     // (not possibly an `object`).
     const outgoingRequest = augmentedRequest as RequestOptions;
 
-    const cacheKey = this.cacheKeyFor(url, outgoingRequest);
-
     const performRequest = async () => {
       return this.trace(url, outgoingRequest, async () => {
+        const cacheKey = this.cacheKeyFor(url, outgoingRequest);
         const cacheOptions = outgoingRequest.cacheOptions
           ? outgoingRequest.cacheOptions
           : this.cacheOptionsFor?.bind(this);
@@ -281,19 +351,32 @@ export abstract class RESTDataSource {
 
     // Cache GET requests based on the calculated cache key
     // Disabling the request cache does not disable the response cache
-    if (this.memoizeGetRequests) {
-      if (outgoingRequest.method === 'GET') {
-        let promise = this.memoizedResults.get(cacheKey);
-        if (promise) return promise;
+    const policy = this.deduplicationPolicyFor(url, outgoingRequest);
+    if (
+      policy.policy === 'deduplicate-during-request-lifetime' ||
+      policy.policy === 'deduplicate-until-invalidated'
+    ) {
+      const previousRequestPromise = this.deduplicationPromises.get(
+        policy.deduplicationKey,
+      );
+      if (previousRequestPromise) return previousRequestPromise;
 
-        promise = performRequest();
-        this.memoizedResults.set(cacheKey, promise);
-        return promise;
-      } else {
-        this.memoizedResults.delete(cacheKey);
-        return performRequest();
+      const thisRequestPromise = performRequest();
+      this.deduplicationPromises.set(
+        policy.deduplicationKey,
+        thisRequestPromise,
+      );
+      try {
+        return await thisRequestPromise;
+      } finally {
+        if (policy.policy === 'deduplicate-during-request-lifetime') {
+          this.deduplicationPromises.delete(policy.deduplicationKey);
+        }
       }
     } else {
+      for (const key of policy.invalidateDeduplicationKeys ?? []) {
+        this.deduplicationPromises.delete(key);
+      }
       return performRequest();
     }
   }
