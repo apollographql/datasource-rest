@@ -52,14 +52,28 @@ describe('RESTDataSource', () => {
         }
       })();
 
-      nock(apiUrl).get('/bar/foo').reply(200, {});
+      nock(apiUrl).get('/foo').reply(200, {});
 
       await dataSource.getFoo();
     });
 
-    it('adds a trailing slash to the base URL if needed', async () => {
+    it('does not automatically adds a trailing slash to the base URL', async () => {
       const dataSource = new (class extends RESTDataSource {
         override baseURL = `${apiUrl}/api`;
+
+        getFoo() {
+          return this.get('foo');
+        }
+      })();
+
+      nock(apiUrl).get('/foo').reply(200, {});
+
+      await dataSource.getFoo();
+    });
+
+    it('works as expected when the base URL has a trailing slash', async () => {
+      const dataSource = new (class extends RESTDataSource {
+        override baseURL = `${apiUrl}/api/`;
 
         getFoo() {
           return this.get('foo');
@@ -70,6 +84,42 @@ describe('RESTDataSource', () => {
 
       await dataSource.getFoo();
     });
+
+    it('can use a whole new URL, overriding baseURL', async () => {
+      const dataSource = new (class extends RESTDataSource {
+        override baseURL = `${apiUrl}/api/`;
+
+        getFoo() {
+          return this.get('https://different-api.example.com/foo/bar');
+        }
+      })();
+
+      nock('https://different-api.example.com').get('/foo/bar').reply(200, {});
+
+      await dataSource.getFoo();
+    });
+
+    it.each([
+      ['', './urn:foo:1', '/urn:foo:1'],
+      ['/api/', './urn:foo:1', '/api/urn:foo:1'],
+      ['', '/urn:foo:1', '/urn:foo:1'],
+      ['/api/', '/urn:foo:1', '/urn:foo:1'],
+    ])(
+      'supports paths with colons near the beginning (base URL path=%p, passed path=%p)',
+      async (baseURLPath, passedPath, nockPath) => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = `${apiUrl}${baseURLPath}`;
+
+          getFoo() {
+            return this.get(passedPath);
+          }
+        })();
+
+        nock(apiUrl).get(nockPath).reply(200, {});
+
+        await dataSource.getFoo();
+      },
+    );
 
     it('allows resolving a base URL asynchronously', async () => {
       const dataSource = new (class extends RESTDataSource {
