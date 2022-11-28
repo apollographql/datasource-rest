@@ -911,6 +911,50 @@ describe('RESTDataSource', () => {
     });
 
     describe('http cache', () => {
+      // Skipping due to https://github.com/apollographql/datasource-rest/issues/102
+      it.skip('caches 301 responses', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+          getFoo(id: number) {
+            return this.get(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(301, '', {
+          location: 'https://api.example.com/foo/2',
+          'cache-control': 'public, max-age=31536000, immutable',
+        });
+        nock(apiUrl).get('/foo/2').reply(200);
+        await dataSource.getFoo(1);
+
+        // Call a second time which should be cached
+        await dataSource.getFoo(1);
+      });
+
+      it('does not cache 302 responses', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+          getFoo(id: number) {
+            return this.get(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(302, '', {
+          location: 'https://api.example.com/foo/2',
+          'cache-control': 'public, max-age=31536000, immutable',
+        });
+        nock(apiUrl).get('/foo/2').reply(200);
+        await dataSource.getFoo(1);
+
+        // Call a second time which should NOT be cached (it's a temporary redirect!).
+        nock(apiUrl).get('/foo/1').reply(302, '', {
+          location: 'https://api.example.com/foo/2',
+          'cache-control': 'public, max-age=31536000, immutable',
+        });
+        nock(apiUrl).get('/foo/2').reply(200);
+        await dataSource.getFoo(1);
+      });
+
       it('allows setting cache options for each request', async () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
