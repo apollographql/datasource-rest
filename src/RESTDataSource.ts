@@ -41,6 +41,9 @@ export interface RequestWithBody extends Omit<RequestOptions, 'body'> {
 
 type DataSourceRequest = GetRequest | RequestWithBody;
 
+// While tempting, this union can't be reduced / factored out to just
+// Omit<WithRequired<GetRequest | RequestWithBody, 'headers'>, 'params'> & { params: URLSearchParams }
+// TS loses its ability to discriminate against the method (and its consequential `body` type)
 export type AugmentedRequest = (
   | Omit<WithRequired<GetRequest, 'headers'>, 'params'>
   | Omit<WithRequired<RequestWithBody, 'headers'>, 'params'>
