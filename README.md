@@ -105,7 +105,11 @@ By default, `RESTDatasource` uses the full request URL as the cache key. Overrid
 For example, you could use this to use header fields as part of the cache key. Even though we do validate header fields and don't serve responses from cache when they don't match, new responses overwrite old ones with different header fields.
 
 ##### `willSendRequest`
-This method is invoked just before the fetch call is made. If a `Promise` is returned from this method it will wait until the promise is completed to continue executing the request.
+This method is invoked at the beginning of processing each request. It's called
+with the `path` and `request` provided to `fetch`, with a guaranteed non-empty
+`headers` and `params` objects. If a `Promise` is returned from this method it
+will wait until the promise is completed to continue executing the request. See
+the [intercepting fetches](#intercepting-fetches) section for usage examples.
 
 ##### `cacheOptionsFor`
 Allows setting the `CacheOptions` to be used for each request/response in the HTTPCache. This is separate from the request-only cache. You can use this to set the TTL.
@@ -180,7 +184,7 @@ You can easily set a header on every request:
 
 ```javascript
 class PersonalizationAPI extends RESTDataSource {
-  willSendRequest(request) {
+  willSendRequest(path, request) {
     request.headers['authorization'] = this.context.token;
   }
 }
@@ -190,15 +194,15 @@ Or add a query parameter:
 
 ```javascript
 class PersonalizationAPI extends RESTDataSource {
-  willSendRequest(request) {
+  willSendRequest(path, request) {
     request.params.set('api_key', this.context.token);
   }
 }
 ```
 
-If you're using TypeScript, you can use the `RequestOptions` type to define the `willSendRequest` signature:
+If you're using TypeScript, you can use the `AugmentedRequest` type to define the `willSendRequest` signature:
 ```ts
-import { RESTDataSource, WillSendRequestOptions } from '@apollo/datasource-rest';
+import { RESTDataSource, AugmentedRequest } from '@apollo/datasource-rest';
 
 class PersonalizationAPI extends RESTDataSource {
   override baseURL = 'https://personalization-api.example.com/';
@@ -207,7 +211,7 @@ class PersonalizationAPI extends RESTDataSource {
     super();
   }
 
-  override willSendRequest(request: WillSendRequestOptions) {
+  override willSendRequest(_path: string, request: AugmentedRequest) {
     request.headers['authorization'] = this.token;
   }
 }
@@ -223,7 +227,7 @@ class PersonalizationAPI extends RESTDataSource {
     super();
   }
 
-  override async resolveURL(path: string) {
+  override async resolveURL(path: string, _request: AugmentedRequest) {
     if (!this.baseURL) {
       const addresses = await resolveSrv(path.split("/")[1] + ".service.consul");
       this.baseURL = addresses[0];

@@ -1,17 +1,13 @@
-// import fetch, { Request } from 'node-fetch';
 import {
+  AugmentedRequest,
   AuthenticationError,
   CacheOptions,
   DataSourceConfig,
   ForbiddenError,
   RequestOptions,
   RESTDataSource,
-  WillSendRequestOptions,
-  // RequestOptions
 } from '../RESTDataSource';
 
-// import { HTTPCache } from '../HTTPCache';
-// import { MapKeyValueCache } from './MapKeyValueCache';
 import { nockAfterEach, nockBeforeEach } from './nockAssertions';
 import nock from 'nock';
 import { GraphQLError } from 'graphql';
@@ -19,13 +15,7 @@ import { GraphQLError } from 'graphql';
 const apiUrl = 'https://api.example.com';
 
 describe('RESTDataSource', () => {
-  // let httpCache: HTTPCache;
-
-  beforeEach(() => {
-    nockBeforeEach();
-    // httpCache = new HTTPCache(new MapKeyValueCache<string>());
-  });
-
+  beforeEach(nockBeforeEach);
   afterEach(nockAfterEach);
 
   describe('constructing requests', () => {
@@ -123,7 +113,7 @@ describe('RESTDataSource', () => {
 
     it('allows resolving a base URL asynchronously', async () => {
       const dataSource = new (class extends RESTDataSource {
-        override async resolveURL(path: string, request: RequestOptions) {
+        override async resolveURL(path: string, request: AugmentedRequest) {
           if (!this.baseURL) {
             this.baseURL = 'https://api.example.com';
           }
@@ -205,7 +195,7 @@ describe('RESTDataSource', () => {
           super(config);
         }
 
-        override willSendRequest(request: WillSendRequestOptions) {
+        override willSendRequest(_path: string, request: AugmentedRequest) {
           request.params.set('apiKey', this.token);
         }
 
@@ -225,7 +215,7 @@ describe('RESTDataSource', () => {
       const dataSource = new (class extends RESTDataSource {
         override baseURL = 'https://api.example.com';
 
-        override willSendRequest(request: WillSendRequestOptions) {
+        override willSendRequest(_path: string, request: AugmentedRequest) {
           request.headers = { ...request.headers, credentials: 'include' };
         }
 
@@ -247,7 +237,7 @@ describe('RESTDataSource', () => {
           super(config);
         }
 
-        override willSendRequest(request: WillSendRequestOptions) {
+        override willSendRequest(_path: string, request: AugmentedRequest) {
           request.headers = { ...request.headers, authorization: this.token };
         }
 
@@ -266,18 +256,6 @@ describe('RESTDataSource', () => {
 
       await dataSource.getFoo('1');
     });
-
-    //   function expectJSONFetch(url: string, bodyJSON: unknown) {
-    //     expect(fetch).toBeCalledTimes(1);
-    //     const request = fetch.mock.calls[0][0] as Request;
-    //     expect(request.url).toEqual(url);
-    //     // request.body is a node-fetch extension which we aren't properly
-    //     // capturing in our TS types.
-    //     expect((request as any).body.toString()).toEqual(
-    //       JSON.stringify(bodyJSON),
-    //     );
-    //     expect(request.headers.get('Content-Type')).toEqual('application/json');
-    //   }
 
     it('serializes a request body that is an object as JSON', async () => {
       const expectedFoo = { foo: 'bar' };
@@ -358,6 +336,49 @@ describe('RESTDataSource', () => {
       nock(apiUrl).post('/foo').reply(200);
 
       await dataSource.postFoo(form);
+    });
+
+    it('does not serialize (but does include) string request bodies', async () => {
+      const dataSource = new (class extends RESTDataSource {
+        override baseURL = 'https://api.example.com';
+
+        updateFoo(id: number, urlEncodedFoo: string) {
+          return this.post(`foo/${id}`, {
+            headers: { 'content-type': 'application/x-www-urlencoded' },
+            body: urlEncodedFoo,
+          });
+        }
+      })();
+
+      nock(apiUrl)
+        .post('/foo/1', (body) => {
+          return body === 'id=1&name=bar';
+        })
+        .reply(200, 'ok', { 'content-type': 'text/plain' });
+
+      await dataSource.updateFoo(1, 'id=1&name=bar');
+    });
+
+    it('does not serialize (but does include) `Buffer` request bodies', async () => {
+      const expectedData = 'id=1&name=bar';
+      const dataSource = new (class extends RESTDataSource {
+        override baseURL = 'https://api.example.com';
+
+        updateFoo(id: number, fooBuf: Buffer) {
+          return this.post(`foo/${id}`, {
+            headers: { 'content-type': 'application/octet-stream' },
+            body: fooBuf,
+          });
+        }
+      })();
+
+      nock(apiUrl)
+        .post('/foo/1', (body) => {
+          return body === expectedData;
+        })
+        .reply(200, 'ok', { 'content-type': 'text/plain' });
+
+      await dataSource.updateFoo(1, Buffer.from(expectedData));
     });
 
     describe('all methods', () => {
@@ -866,6 +887,85 @@ describe('RESTDataSource', () => {
         await expect(dataSource.getFoo(1)).rejects.toThrow();
 
         jest.useRealTimers();
+      });
+    });
+
+    describe('user hooks', () => {
+      describe('willSendRequest', () => {
+        const obj = { foo: 'bar' };
+        const str = 'foo=bar';
+        const buffer = Buffer.from(str);
+
+        it.each([
+          ['object', obj, obj],
+          ['string', str, str],
+          ['buffer', buffer, str],
+        ])(`can set the body to a %s`, async (_, body, expected) => {
+          const dataSource = new (class extends RESTDataSource {
+            override baseURL = apiUrl;
+
+            updateFoo(id: number, foo: string | Buffer | { foo: string }) {
+              return this.post(`foo/${id}`, { body: foo });
+            }
+
+            override async willSendRequest(
+              path: string,
+              requestOpts: AugmentedRequest,
+            ) {
+              expect(path).toMatch('foo/1');
+              expect(requestOpts.body).toEqual(body);
+            }
+          })();
+
+          nock(apiUrl).post('/foo/1', expected).reply(200);
+          await dataSource.updateFoo(1, body);
+        });
+
+        it('is called with the correct path', async () => {
+          const dataSource = new (class extends RESTDataSource {
+            override baseURL = apiUrl;
+
+            updateFoo(id: number, foo: { foo: string }) {
+              return this.post(`foo/${id}`, { body: foo });
+            }
+
+            override async willSendRequest(
+              path: string,
+              _requestOpts: AugmentedRequest,
+            ) {
+              expect(path).toMatch('foo/1');
+            }
+          })();
+
+          nock(apiUrl).post('/foo/1', obj).reply(200);
+          await dataSource.updateFoo(1, obj);
+        });
+      });
+
+      describe('resolveURL', () => {
+        it('sees the same request body as provided by the caller', async () => {
+          const dataSource = new (class extends RESTDataSource {
+            override baseURL = apiUrl;
+
+            updateFoo(id: number, foo: { name: string }) {
+              return this.post(`foo/${id}`, { body: foo });
+            }
+
+            override resolveURL(path: string, requestOpts: AugmentedRequest) {
+              expect(requestOpts.body).toMatchInlineSnapshot(`
+                {
+                  "name": "blah",
+                }
+              `);
+              return super.resolveURL(path, requestOpts);
+            }
+          })();
+
+          nock(apiUrl)
+            .post('/foo/1', JSON.stringify({ name: 'blah' }))
+            .reply(200);
+          await dataSource.updateFoo(1, { name: 'blah' });
+        });
       });
     });
   });
