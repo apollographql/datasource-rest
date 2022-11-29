@@ -894,7 +894,7 @@ describe('RESTDataSource', () => {
         const obj = { foo: 'bar' };
         const str = 'foo=bar';
         const buffer = Buffer.from(str);
-        
+
         it.each([
           ['object', obj, obj],
           ['string', str, str],
@@ -938,7 +938,7 @@ describe('RESTDataSource', () => {
 
           nock(apiUrl).post('/foo/1', obj).reply(200);
           await dataSource.updateFoo(1, obj);
-        })
+        });
       });
 
       describe('resolveURL', () => {
