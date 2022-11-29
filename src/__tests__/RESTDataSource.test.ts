@@ -360,6 +360,7 @@ describe('RESTDataSource', () => {
     });
 
     it('does not serialize (but does include) `Buffer` request bodies', async () => {
+      const expectedData = 'id=1&name=bar';
       const dataSource = new (class extends RESTDataSource {
         override baseURL = 'https://api.example.com';
 
@@ -373,11 +374,11 @@ describe('RESTDataSource', () => {
 
       nock(apiUrl)
         .post('/foo/1', (body) => {
-          return Buffer.from(body.data).toString() === 'id=1&name=bar';
+          return body === expectedData;
         })
         .reply(200, 'ok', { 'content-type': 'text/plain' });
 
-      await dataSource.updateFoo(1, Buffer.from('id=1&name=bar'));
+      await dataSource.updateFoo(1, Buffer.from(expectedData));
     });
 
     describe('all methods', () => {
@@ -898,7 +899,7 @@ describe('RESTDataSource', () => {
         it.each([
           ['object', obj, obj],
           ['string', str, str],
-          ['buffer', buffer, buffer.toJSON()],
+          ['buffer', buffer, str],
         ])(`can set the body to a %s`, async (_, body, expected) => {
           const dataSource = new (class extends RESTDataSource {
             override baseURL = apiUrl;

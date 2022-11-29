@@ -236,6 +236,7 @@ export abstract class RESTDataSource {
     // `string`, `Buffer`, and `undefined` are passed through up above as-is.
     if (
       augmentedRequest.body != null &&
+      !(augmentedRequest.body instanceof Buffer) &&
       (augmentedRequest.body.constructor === Object ||
         Array.isArray(augmentedRequest.body) ||
         ((augmentedRequest.body as any).toJSON &&
