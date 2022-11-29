@@ -198,7 +198,7 @@ class PersonalizationAPI extends RESTDataSource {
 
 If you're using TypeScript, you can use the `RequestOptions` type to define the `willSendRequest` signature:
 ```ts
-import { RESTDataSource, WillSendRequestOptions } from '@apollo/datasource-rest';
+import { RESTDataSource, AugmentedRequest } from '@apollo/datasource-rest';
 
 class PersonalizationAPI extends RESTDataSource {
   override baseURL = 'https://personalization-api.example.com/';
@@ -207,7 +207,7 @@ class PersonalizationAPI extends RESTDataSource {
     super();
   }
 
-  override willSendRequest(request: WillSendRequestOptions) {
+  override willSendRequest(request: AugmentedRequest) {
     request.headers['authorization'] = this.token;
   }
 }
