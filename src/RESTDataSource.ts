@@ -84,7 +84,7 @@ export abstract class RESTDataSource {
 
   protected resolveURL(
     path: string,
-    _request: RequestOptions,
+    _request: AugmentedRequest,
   ): ValueOrPromise<URL> {
     return new URL(path, this.baseURL);
   }
@@ -221,6 +221,13 @@ export abstract class RESTDataSource {
       await this.willSendRequest(augmentedRequest);
     }
 
+    const url = await this.resolveURL(path, augmentedRequest);
+
+    // Append params to existing params in the path
+    for (const [name, value] of augmentedRequest.params as URLSearchParams) {
+      url.searchParams.append(name, value);
+    }
+
     // We accept arbitrary objects and arrays as body and serialize them as JSON.
     // `string`, `Buffer`, and `undefined` are passed through up above as-is.
     if (
@@ -242,13 +249,6 @@ export abstract class RESTDataSource {
     // At this point we know the `body` is a `string`, `Buffer`, or `undefined`
     // (not possibly an `object`).
     const outgoingRequest = <RequestOptions>augmentedRequest;
-
-    const url = await this.resolveURL(path, outgoingRequest);
-
-    // Append params to existing params in the path
-    for (const [name, value] of outgoingRequest.params as URLSearchParams) {
-      url.searchParams.append(name, value);
-    }
 
     const cacheKey = this.cacheKeyFor(url, outgoingRequest);
 

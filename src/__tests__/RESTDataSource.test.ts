@@ -113,7 +113,7 @@ describe('RESTDataSource', () => {
 
     it('allows resolving a base URL asynchronously', async () => {
       const dataSource = new (class extends RESTDataSource {
-        override async resolveURL(path: string, request: RequestOptions) {
+        override async resolveURL(path: string, request: AugmentedRequest) {
           if (!this.baseURL) {
             this.baseURL = 'https://api.example.com';
           }
@@ -916,7 +916,7 @@ describe('RESTDataSource', () => {
       });
 
       describe('resolveURL', () => {
-        it('sees the same request body used by outgoing fetch', async () => {
+        it('sees the same request body as provided by the caller', async () => {
           const dataSource = new (class extends RESTDataSource {
             override baseURL = apiUrl;
 
@@ -924,18 +924,10 @@ describe('RESTDataSource', () => {
               return this.post(`foo/${id}`, { body: foo });
             }
 
-            override resolveURL(path: string, requestOpts: RequestOptions) {
-              expect(requestOpts).toMatchInlineSnapshot(`
+            override resolveURL(path: string, requestOpts: AugmentedRequest) {
+              expect(requestOpts.body).toMatchInlineSnapshot(`
                 {
-                  "body": "{"name":"blah"}",
-                  "headers": {
-                    "content-type": "application/json",
-                  },
-                  "method": "POST",
-                  "params": URLSearchParams {
-                    Symbol(query): [],
-                    Symbol(context): null,
-                  },
+                  "name": "blah",
                 }
               `);
               return super.resolveURL(path, requestOpts);
