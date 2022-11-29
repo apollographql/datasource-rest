@@ -3,7 +3,6 @@ import {
   AuthenticationError,
   CacheOptions,
   DataSourceConfig,
-  DataSourceRequest,
   ForbiddenError,
   RequestOptions,
   RESTDataSource,
@@ -216,7 +215,7 @@ describe('RESTDataSource', () => {
       const dataSource = new (class extends RESTDataSource {
         override baseURL = 'https://api.example.com';
 
-        override willSendRequest(request: DataSourceRequest) {
+        override willSendRequest(request: AugmentedRequest) {
           request.headers = { ...request.headers, credentials: 'include' };
         }
 
@@ -900,7 +899,7 @@ describe('RESTDataSource', () => {
               return this.post(`foo/${id}`, { body: foo });
             }
 
-            override async willSendRequest(requestOpts: DataSourceRequest) {
+            override async willSendRequest(requestOpts: AugmentedRequest) {
               expect(requestOpts.body).toMatchInlineSnapshot(`
                 {
                   "name": "blah",

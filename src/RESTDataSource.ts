@@ -39,7 +39,7 @@ export interface RequestWithBody extends Omit<RequestOptions, 'body'> {
   body?: FetcherRequestInit['body'] | object;
 }
 
-export type DataSourceRequest = GetRequest | RequestWithBody;
+type DataSourceRequest = GetRequest | RequestWithBody;
 
 export type AugmentedRequest = (
   | Omit<WithRequired<GetRequest, 'headers'>, 'params'>
@@ -79,7 +79,7 @@ export abstract class RESTDataSource {
   }
 
   protected willSendRequest?(
-    requestOpts: DataSourceRequest,
+    requestOpts: AugmentedRequest,
   ): ValueOrPromise<void>;
 
   protected resolveURL(
