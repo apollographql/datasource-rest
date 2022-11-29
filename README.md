@@ -109,7 +109,8 @@ This method is invoked immediately after `fetch` is called (or any of the
 convenience functions which call it like `.get()`). It's called with the `path`
 and `request` provided to `fetch`, with a guaranteed non-empty `headers` and
 `params` objects. If a `Promise` is returned from this method it will wait until
-the promise is completed to continue executing the request.
+the promise is completed to continue executing the request. See the
+[intercepting fetches](#intercepting-fetches) section for usage examples.
 
 ##### `cacheOptionsFor`
 Allows setting the `CacheOptions` to be used for each request/response in the HTTPCache. This is separate from the request-only cache. You can use this to set the TTL.
