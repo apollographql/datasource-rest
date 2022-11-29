@@ -105,12 +105,11 @@ By default, `RESTDatasource` uses the full request URL as the cache key. Overrid
 For example, you could use this to use header fields as part of the cache key. Even though we do validate header fields and don't serve responses from cache when they don't match, new responses overwrite old ones with different header fields.
 
 ##### `willSendRequest`
-This method is invoked immediately after `fetch` is called (or any of the
-convenience functions which call it like `.get()`). It's called with the `path`
-and `request` provided to `fetch`, with a guaranteed non-empty `headers` and
-`params` objects. If a `Promise` is returned from this method it will wait until
-the promise is completed to continue executing the request. See the
-[intercepting fetches](#intercepting-fetches) section for usage examples.
+This method is invoked at the beginning of processing each request. It's called
+with the `path` and `request` provided to `fetch`, with a guaranteed non-empty
+`headers` and `params` objects. If a `Promise` is returned from this method it
+will wait until the promise is completed to continue executing the request. See
+the [intercepting fetches](#intercepting-fetches) section for usage examples.
 
 ##### `cacheOptionsFor`
 Allows setting the `CacheOptions` to be used for each request/response in the HTTPCache. This is separate from the request-only cache. You can use this to set the TTL.

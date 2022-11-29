@@ -41,12 +41,10 @@ export interface RequestWithBody extends Omit<RequestOptions, 'body'> {
 
 type DataSourceRequest = GetRequest | RequestWithBody;
 
+// While tempting, this union can't be reduced / factored out to just
+// Omit<WithRequired<GetRequest | RequestWithBody, 'headers'>, 'params'> & { params: URLSearchParams }
+// TS loses its ability to discriminate against the method (and its consequential `body` type)
 /**
- * While tempting, this union can't be reduced / factored out to just
- * Omit<WithRequired<GetRequest | RequestWithBody, 'headers'>, 'params'> & {
- * params: URLSearchParams } TS loses its ability to discriminate against the
- * method (and its consequential `body` type)
- *
  * This type is for convenience w.r.t. the `willSendRequest` and `resolveURL`
  * hooks to ensure that headers and params are always present, even if they're
  * empty.
