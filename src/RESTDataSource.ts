@@ -29,15 +29,6 @@ export type RequestOptions = FetcherRequestInit & {
       ) => CacheOptions | undefined);
 };
 
-type ModifiedRequest = Omit<
-  WithRequired<RequestOptions, 'headers'>,
-  'params'
-> & {
-  params: URLSearchParams;
-};
-
-export type WillSendRequestOptions = ModifiedRequest;
-
 export interface GetRequest extends RequestOptions {
   method?: 'GET';
   body?: never;
@@ -48,7 +39,14 @@ export interface RequestWithBody extends Omit<RequestOptions, 'body'> {
   body?: FetcherRequestInit['body'] | object;
 }
 
-type DataSourceRequest = GetRequest | RequestWithBody;
+export type DataSourceRequest = GetRequest | RequestWithBody;
+
+export type AugmentedRequest = (
+  | Omit<WithRequired<GetRequest, 'headers'>, 'params'>
+  | Omit<WithRequired<RequestWithBody, 'headers'>, 'params'>
+) & {
+  params: URLSearchParams;
+};
 
 export interface CacheOptions {
   ttl?: number;
@@ -81,7 +79,7 @@ export abstract class RESTDataSource {
   }
 
   protected willSendRequest?(
-    requestOpts: WillSendRequestOptions,
+    requestOpts: DataSourceRequest,
   ): ValueOrPromise<void>;
 
   protected resolveURL(
@@ -207,65 +205,66 @@ export abstract class RESTDataSource {
 
   private async fetch<TResult>(
     path: string,
-    request: DataSourceRequest,
+    incomingRequest: DataSourceRequest,
   ): Promise<TResult> {
-    const modifiedRequest: ModifiedRequest = {
-      ...request,
+    const augmentedRequest: AugmentedRequest = {
+      ...incomingRequest,
       // guarantee params and headers objects before calling `willSendRequest` for convenience
       params:
-        request.params instanceof URLSearchParams
-          ? request.params
-          : this.urlSearchParamsFromRecord(request.params),
-      headers: request.headers ?? Object.create(null),
-      body: undefined,
+        incomingRequest.params instanceof URLSearchParams
+          ? incomingRequest.params
+          : this.urlSearchParamsFromRecord(incomingRequest.params),
+      headers: incomingRequest.headers ?? Object.create(null),
     };
 
-    // We accept arbitrary objects and arrays as body and serialize them as JSON
-    if (
-      request.body !== undefined &&
-      request.body !== null &&
-      (request.body.constructor === Object ||
-        Array.isArray(request.body) ||
-        ((request.body as any).toJSON &&
-          typeof (request.body as any).toJSON === 'function'))
-    ) {
-      modifiedRequest.body = JSON.stringify(request.body);
-      // If Content-Type header has not been previously set, set to application/json
-      if (!modifiedRequest.headers) {
-        modifiedRequest.headers = { 'content-type': 'application/json' };
-      } else if (!modifiedRequest.headers['content-type']) {
-        modifiedRequest.headers['content-type'] = 'application/json';
-      }
-    } else if (typeof request.body === 'string') {
-      modifiedRequest.body = request.body;
-    }
-
     if (this.willSendRequest) {
-      await this.willSendRequest(modifiedRequest);
+      await this.willSendRequest(augmentedRequest);
     }
 
-    const url = await this.resolveURL(path, modifiedRequest);
+    // We accept arbitrary objects and arrays as body and serialize them as JSON.
+    // `string`, `Buffer`, and `undefined` are passed through up above as-is.
+    if (
+      augmentedRequest.body != null &&
+      (augmentedRequest.body.constructor === Object ||
+        Array.isArray(augmentedRequest.body) ||
+        ((augmentedRequest.body as any).toJSON &&
+          typeof (augmentedRequest.body as any).toJSON === 'function'))
+    ) {
+      augmentedRequest.body = JSON.stringify(augmentedRequest.body);
+      // If Content-Type header has not been previously set, set to application/json
+      if (!augmentedRequest.headers) {
+        augmentedRequest.headers = { 'content-type': 'application/json' };
+      } else if (!augmentedRequest.headers['content-type']) {
+        augmentedRequest.headers['content-type'] = 'application/json';
+      }
+    }
+
+    // At this point we know the `body` is a `string`, `Buffer`, or `undefined`
+    // (not possibly an `object`).
+    const outgoingRequest = <RequestOptions>augmentedRequest;
+
+    const url = await this.resolveURL(path, outgoingRequest);
 
     // Append params to existing params in the path
-    for (const [name, value] of modifiedRequest.params as URLSearchParams) {
+    for (const [name, value] of outgoingRequest.params as URLSearchParams) {
       url.searchParams.append(name, value);
     }
 
-    const cacheKey = this.cacheKeyFor(url, modifiedRequest);
+    const cacheKey = this.cacheKeyFor(url, outgoingRequest);
 
     const performRequest = async () => {
-      return this.trace(url, modifiedRequest, async () => {
-        const cacheOptions = modifiedRequest.cacheOptions
-          ? modifiedRequest.cacheOptions
+      return this.trace(url, outgoingRequest, async () => {
+        const cacheOptions = outgoingRequest.cacheOptions
+          ? outgoingRequest.cacheOptions
           : this.cacheOptionsFor?.bind(this);
         try {
-          const response = await this.httpCache.fetch(url, modifiedRequest, {
+          const response = await this.httpCache.fetch(url, outgoingRequest, {
             cacheKey,
             cacheOptions,
           });
-          return await this.didReceiveResponse(response, modifiedRequest);
+          return await this.didReceiveResponse(response, outgoingRequest);
         } catch (error) {
-          this.didEncounterError(error as Error, modifiedRequest);
+          this.didEncounterError(error as Error, outgoingRequest);
         }
       });
     };
@@ -273,7 +272,7 @@ export abstract class RESTDataSource {
     // Cache GET requests based on the calculated cache key
     // Disabling the request cache does not disable the response cache
     if (this.memoizeGetRequests) {
-      if (request.method === 'GET') {
+      if (outgoingRequest.method === 'GET') {
         let promise = this.memoizedResults.get(cacheKey);
         if (promise) return promise;
 

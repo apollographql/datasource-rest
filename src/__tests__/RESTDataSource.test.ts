@@ -1,15 +1,12 @@
 import {
+  AugmentedRequest,
   AuthenticationError,
   CacheOptions,
   DataSourceConfig,
+  DataSourceRequest,
   ForbiddenError,
   RequestOptions,
   RESTDataSource,
-  WillSendRequestOptions,
-<<<<<<< HEAD
-  // RequestOptions
-=======
->>>>>>> e01adcb (Test demonstrating bad behavior)
 } from '../RESTDataSource';
 
 import { nockAfterEach, nockBeforeEach } from './nockAssertions';
@@ -199,7 +196,7 @@ describe('RESTDataSource', () => {
           super(config);
         }
 
-        override willSendRequest(request: WillSendRequestOptions) {
+        override willSendRequest(request: AugmentedRequest) {
           request.params.set('apiKey', this.token);
         }
 
@@ -219,7 +216,7 @@ describe('RESTDataSource', () => {
       const dataSource = new (class extends RESTDataSource {
         override baseURL = 'https://api.example.com';
 
-        override willSendRequest(request: WillSendRequestOptions) {
+        override willSendRequest(request: DataSourceRequest) {
           request.headers = { ...request.headers, credentials: 'include' };
         }
 
@@ -241,7 +238,7 @@ describe('RESTDataSource', () => {
           super(config);
         }
 
-        override willSendRequest(request: WillSendRequestOptions) {
+        override willSendRequest(request: AugmentedRequest) {
           request.headers = { ...request.headers, authorization: this.token };
         }
 
@@ -361,6 +358,27 @@ describe('RESTDataSource', () => {
         .reply(200, 'ok', { 'content-type': 'text/plain' });
 
       await dataSource.updateFoo(1, 'id=1&name=bar');
+    });
+
+    it('does not serialize (but does include) `Buffer` request bodies', async () => {
+      const dataSource = new (class extends RESTDataSource {
+        override baseURL = 'https://api.example.com';
+
+        updateFoo(id: number, fooBuf: Buffer) {
+          return this.post(`foo/${id}`, {
+            headers: { 'content-type': 'application/octet-stream' },
+            body: fooBuf,
+          });
+        }
+      })();
+
+      nock(apiUrl)
+        .post('/foo/1', (body) => {
+          return Buffer.from(body.data).toString() === 'id=1&name=bar';
+        })
+        .reply(200, 'ok', { 'content-type': 'text/plain' });
+
+      await dataSource.updateFoo(1, Buffer.from('id=1&name=bar'));
     });
 
     describe('all methods', () => {
@@ -874,7 +892,7 @@ describe('RESTDataSource', () => {
 
     describe('user hooks', () => {
       describe('willSendRequest', () => {
-        it('sees the same request body used by outgoing fetch', async () => {
+        it('sees the same request body as provided by the caller', async () => {
           const dataSource = new (class extends RESTDataSource {
             override baseURL = apiUrl;
 
@@ -882,20 +900,10 @@ describe('RESTDataSource', () => {
               return this.post(`foo/${id}`, { body: foo });
             }
 
-            override async willSendRequest(
-              requestOpts: WillSendRequestOptions,
-            ) {
-              expect(requestOpts).toMatchInlineSnapshot(`
+            override async willSendRequest(requestOpts: DataSourceRequest) {
+              expect(requestOpts.body).toMatchInlineSnapshot(`
                 {
-                  "body": "{"name":"blah"}",
-                  "headers": {
-                    "content-type": "application/json",
-                  },
-                  "method": "POST",
-                  "params": URLSearchParams {
-                    Symbol(query): [],
-                    Symbol(context): null,
-                  },
+                  "name": "blah",
                 }
               `);
             }
