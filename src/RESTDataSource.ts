@@ -68,13 +68,13 @@ export interface DataSourceConfig {
 }
 
 // RESTDataSource has two layers of caching. The first layer is purely in-memory
-// within a single RESTDataSource object and is called "deduplication". It is
-// primarily designed so that multiple identical GET requests started
+// within a single RESTDataSource object and is called "request deduplication".
+// It is primarily designed so that multiple identical GET requests started
 // concurrently can share one real HTTP GET; it does not observe HTTP response
 // headers. (The second layer uses a potentially shared KeyValueCache for
-// storage and does observe HTTP response headers.) To configure deduplication,
-// override deduplicationPolicyFor.
-export type DeduplicationPolicy =
+// storage and does observe HTTP response headers.) To configure request
+// deduplication, override requestDeduplicationPolicyFor.
+export type RequestDeduplicationPolicy =
   // If a request with the same deduplication key is in progress, share its
   // result. Otherwise, start a request, allow other requests to de-duplicate
   // against it while it is running, and forget about it once the request returns
@@ -130,10 +130,10 @@ export abstract class RESTDataSource {
    * be deduplicated, you may want to put more information into the cache key or
    * be careful to keep the HTTP method in the deduplication key.
    */
-  protected deduplicationPolicyFor(
+  protected requestDeduplicationPolicyFor(
     url: URL,
     request: RequestOptions,
-  ): DeduplicationPolicy {
+  ): RequestDeduplicationPolicy {
     // Start with the cache key that is used for the shared header-sensitive
     // cache. Note that its default implementation does not include the HTTP
     // method, so if a subclass overrides this and allows non-GETs to be
@@ -351,7 +351,7 @@ export abstract class RESTDataSource {
 
     // Cache GET requests based on the calculated cache key
     // Disabling the request cache does not disable the response cache
-    const policy = this.deduplicationPolicyFor(url, outgoingRequest);
+    const policy = this.requestDeduplicationPolicyFor(url, outgoingRequest);
     if (
       policy.policy === 'deduplicate-during-request-lifetime' ||
       policy.policy === 'deduplicate-until-invalidated'
@@ -367,6 +367,9 @@ export abstract class RESTDataSource {
         thisRequestPromise,
       );
       try {
+        // The request promise needs to be awaited here rather than just
+        // returned so that we can guarantee the deduplication cache is cleared
+        // in the event of an error during the request.
         return await thisRequestPromise;
       } finally {
         if (policy.policy === 'deduplicate-during-request-lifetime') {

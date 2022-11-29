@@ -3,7 +3,7 @@ import {
   AuthenticationError,
   CacheOptions,
   DataSourceConfig,
-  DeduplicationPolicy,
+  RequestDeduplicationPolicy,
   ForbiddenError,
   RequestOptions,
   RESTDataSource,
@@ -618,11 +618,11 @@ describe('RESTDataSource', () => {
       it('de-duplicates sequential requests with the same cache key with policy deduplicate-until-invalidated', async () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
-          protected override deduplicationPolicyFor(
+          protected override requestDeduplicationPolicyFor(
             url: URL,
             request: RequestOptions,
-          ): DeduplicationPolicy {
-            const p = super.deduplicationPolicyFor(url, request);
+          ): RequestDeduplicationPolicy {
+            const p = super.requestDeduplicationPolicyFor(url, request);
             return p.policy === 'deduplicate-during-request-lifetime'
               ? {
                   policy: 'deduplicate-until-invalidated',
@@ -698,11 +698,11 @@ describe('RESTDataSource', () => {
       it('non-GET request invalidates deduplication of request with the same cache key with deduplicate-until-invalidated', async () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
-          protected override deduplicationPolicyFor(
+          protected override requestDeduplicationPolicyFor(
             url: URL,
             request: RequestOptions,
-          ): DeduplicationPolicy {
-            const p = super.deduplicationPolicyFor(url, request);
+          ): RequestDeduplicationPolicy {
+            const p = super.requestDeduplicationPolicyFor(url, request);
             return p.policy === 'deduplicate-during-request-lifetime'
               ? {
                   policy: 'deduplicate-until-invalidated',
@@ -757,7 +757,7 @@ describe('RESTDataSource', () => {
       it('allows disabling deduplication', async () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
-          protected override deduplicationPolicyFor() {
+          protected override requestDeduplicationPolicyFor() {
             return { policy: 'do-not-deduplicate' } as const;
           }
 
@@ -958,7 +958,7 @@ describe('RESTDataSource', () => {
       it('allows setting cache options for each request', async () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
-          protected override deduplicationPolicyFor() {
+          protected override requestDeduplicationPolicyFor() {
             return { policy: 'do-not-deduplicate' } as const;
           }
 
@@ -987,7 +987,7 @@ describe('RESTDataSource', () => {
 
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
-          protected override deduplicationPolicyFor() {
+          protected override requestDeduplicationPolicyFor() {
             return { policy: 'do-not-deduplicate' } as const;
           }
 

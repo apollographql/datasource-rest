@@ -2,7 +2,7 @@
 
 This package exports a ([`RESTDataSource`](https://github.com/apollographql/datasource-rest#apollo-rest-data-source)) class which is used for fetching data from a REST API and exposing it via GraphQL within Apollo Server.
 
-RESTDataSource provides two levels of caching: an in-memory "deduplication" feature primarily used to avoid sending the same GET request multiple times in parallel, and an "HTTP cache" which provides browser-style caching in a (potentially shared) `KeyValueCache` observing to standard HTTP caching headers.
+RESTDataSource provides two levels of caching: an in-memory "request deduplication" feature primarily used to avoid sending the same GET request multiple times in parallel, and an "HTTP cache" which provides browser-style caching in a (potentially shared) `KeyValueCache` which observes standard HTTP caching headers.
 
 ## Documentation
 
@@ -79,9 +79,9 @@ By default, `RESTDatasource` uses the full request URL as a cache key when savin
 
 For example, you could use this to use header fields or the HTTP method as part of the cache key. Even though we do validate header fields and don't serve responses from cache when they don't match, new responses overwrite old ones with different header fields. (For the HTTP method, this might be a positive thing, as you may want a `POST /foo` request to stop a previously cached `GET /foo` from being returned.)
 
-##### `deduplicationPolicyFor`
+##### `requestDeduplicationPolicyFor`
 
-By default, `RESTDataSource` de-duplicates all outgoing **GET requests** in an in-memory cache, separate from the `KeyValueCache` used for the HTTP response cache. It makes the assumption that two HTTP GET requests to the same URL made in parallel can share the same response. When the GET request returns, its response is delivered to each caller that requested the same URL concurrently, and then it is removed from the cache.
+By default, `RESTDataSource` de-duplicates all **concurrent** outgoing **GET requests** in an in-memory cache, separate from the `KeyValueCache` used for the HTTP response cache. It makes the assumption that two HTTP GET requests to the same URL made in parallel can share the same response. When the GET request returns, its response is delivered to each caller that requested the same URL concurrently, and then it is removed from the cache.
 
 If a request is made with the same cache key (URL by default) but with an HTTP method other than GET, deduplication of the in-flight request is invalidated: the next parallel `GET` request for the same URL will make a new request.
 
@@ -90,7 +90,7 @@ You can configure this behavior in several ways:
 - You can tell `RESTDataSource` to de-duplicate a request against new requests that start after it completes, not just overlapping requests. (This was the poorly-documented behavior of `RESTDataSource` prior to v5.0.0.)
 - You can control the "deduplication key" independently from the `KeyValueCache` cache key.
 
-You do this by overriding the `deduplicationPolicyFor` method in your class. This method takes an URL and a request, and returns a policy object with one of three forms:
+You do this by overriding the `requestDeduplicationPolicyFor` method in your class. This method takes an URL and a request, and returns a policy object with one of three forms:
 
 - `{policy: 'deduplicate-during-request-lifetime', deduplicationKey: string}`: This is the default behavior for GET requests. If a request with the same deduplication key is in progress, share its result. Otherwise, start a request, allow other requests to de-duplicate against it while it is running, and forget about it once the request returns successfully.
 - `{policy: 'deduplicate-until-invalidated', deduplicationKey: string}`: This was the default behavior for GET requests in versions prior to v5. If a request with the same deduplication key is in progress, share its result. Otherwise, start a request and allow other requests to de-duplicate against it while it is running. All future requests with policy `deduplicate-during-request-lifetime` or `deduplicate-until-invalidated` with the same `deduplicationKey` will share the same result until a request is started with policy `do-not-deduplicate` and a matching entry in `invalidateDeduplicationKeys`.
@@ -99,10 +99,10 @@ You do this by overriding the `deduplicationPolicyFor` method in your class. Thi
 The default implementation of this method is:
 
 ```ts
-protected deduplicationPolicyFor(
+protected requestDeduplicationPolicyFor(
   url: URL,
   request: RequestOptions,
-): DeduplicationPolicy {
+): RequestDeduplicationPolicy {
   // Start with the cache key that is used for the shared header-sensitive
   // cache. Note that its default implementation does not include the HTTP
   // method, so if a subclass overrides this and allows non-GETs to be
@@ -130,7 +130,7 @@ To fully disable de-duplication, just always return `do-not-duplicate`. (This do
 
 ```ts
 class MoviesAPI extends RESTDataSource {
-  protected override deduplicationPolicyFor() {
+  protected override requestDeduplicationPolicyFor() {
     return { policy: 'do-not-deduplicate' } as const;
   }
 }
