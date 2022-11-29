@@ -195,7 +195,7 @@ describe('RESTDataSource', () => {
           super(config);
         }
 
-        override willSendRequest(request: AugmentedRequest) {
+        override willSendRequest(_path: string, request: AugmentedRequest) {
           request.params.set('apiKey', this.token);
         }
 
@@ -215,7 +215,7 @@ describe('RESTDataSource', () => {
       const dataSource = new (class extends RESTDataSource {
         override baseURL = 'https://api.example.com';
 
-        override willSendRequest(request: AugmentedRequest) {
+        override willSendRequest(_path: string, request: AugmentedRequest) {
           request.headers = { ...request.headers, credentials: 'include' };
         }
 
@@ -237,7 +237,7 @@ describe('RESTDataSource', () => {
           super(config);
         }
 
-        override willSendRequest(request: AugmentedRequest) {
+        override willSendRequest(_path: string, request: AugmentedRequest) {
           request.headers = { ...request.headers, authorization: this.token };
         }
 
@@ -891,28 +891,54 @@ describe('RESTDataSource', () => {
 
     describe('user hooks', () => {
       describe('willSendRequest', () => {
-        it('sees the same request body as provided by the caller', async () => {
+        const obj = { foo: 'bar' };
+        const str = 'foo=bar';
+        const buffer = Buffer.from(str);
+        
+        it.each([
+          ['object', obj, obj],
+          ['string', str, str],
+          ['buffer', buffer, buffer.toJSON()],
+        ])(`can set the body to a %s`, async (_, body, expected) => {
           const dataSource = new (class extends RESTDataSource {
             override baseURL = apiUrl;
 
-            updateFoo(id: number, foo: { name: string }) {
+            updateFoo(id: number, foo: string | Buffer | { foo: string }) {
               return this.post(`foo/${id}`, { body: foo });
             }
 
-            override async willSendRequest(requestOpts: AugmentedRequest) {
-              expect(requestOpts.body).toMatchInlineSnapshot(`
-                {
-                  "name": "blah",
-                }
-              `);
+            override async willSendRequest(
+              path: string,
+              requestOpts: AugmentedRequest,
+            ) {
+              expect(path).toMatch('foo/1');
+              expect(requestOpts.body).toEqual(body);
             }
           })();
 
-          nock(apiUrl)
-            .post('/foo/1', JSON.stringify({ name: 'blah' }))
-            .reply(200);
-          await dataSource.updateFoo(1, { name: 'blah' });
+          nock(apiUrl).post('/foo/1', expected).reply(200);
+          await dataSource.updateFoo(1, body);
         });
+
+        it('is called with the correct path', async () => {
+          const dataSource = new (class extends RESTDataSource {
+            override baseURL = apiUrl;
+
+            updateFoo(id: number, foo: { foo: string }) {
+              return this.post(`foo/${id}`, { body: foo });
+            }
+
+            override async willSendRequest(
+              path: string,
+              _requestOpts: AugmentedRequest,
+            ) {
+              expect(path).toMatch('foo/1');
+            }
+          })();
+
+          nock(apiUrl).post('/foo/1', obj).reply(200);
+          await dataSource.updateFoo(1, obj);
+        })
       });
 
       describe('resolveURL', () => {

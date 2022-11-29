@@ -82,6 +82,7 @@ export abstract class RESTDataSource {
   }
 
   protected willSendRequest?(
+    path: string,
     requestOpts: AugmentedRequest,
   ): ValueOrPromise<void>;
 
@@ -221,7 +222,7 @@ export abstract class RESTDataSource {
     };
 
     if (this.willSendRequest) {
-      await this.willSendRequest(augmentedRequest);
+      await this.willSendRequest(path, augmentedRequest);
     }
 
     const url = await this.resolveURL(path, augmentedRequest);
