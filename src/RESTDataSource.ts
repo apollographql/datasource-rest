@@ -252,7 +252,7 @@ export abstract class RESTDataSource {
 
     // At this point we know the `body` is a `string`, `Buffer`, or `undefined`
     // (not possibly an `object`).
-    const outgoingRequest = <RequestOptions>augmentedRequest;
+    const outgoingRequest = augmentedRequest as RequestOptions;
 
     const cacheKey = this.cacheKeyFor(url, outgoingRequest);
 
