@@ -5,8 +5,11 @@ import {
   AugmentedRequest,
   AuthenticationError,
   CacheOptions,
-  DataSourceConfig, ForbiddenError, RequestDeduplicationPolicy, RequestOptions,
-  RESTDataSource
+  DataSourceConfig,
+  ForbiddenError,
+  RequestDeduplicationPolicy,
+  RequestOptions,
+  RESTDataSource,
 } from '../RESTDataSource';
 import { nockAfterEach, nockBeforeEach } from './nockAssertions';
 
