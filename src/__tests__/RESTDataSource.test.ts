@@ -1140,13 +1140,11 @@ describe('RESTDataSource', () => {
             }
           })();
 
-          nock(apiUrl)
-            .post('/foo/1', { name: 'bar' })
-            .reply(200);
+          nock(apiUrl).post('/foo/1', { name: 'bar' }).reply(200);
           await dataSource.updateFoo(1, { name: 'bar' });
           expect(calls).toBe(1);
         });
-      })
+      });
     });
   });
 });
