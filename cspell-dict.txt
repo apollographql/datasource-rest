@@ -7,13 +7,14 @@ changesets
 cimg
 circleci
 codesandbox
+concat
 datasource
 direnv
 falsey
 httpcache
 isplainobject
 keyvaluecache
-opde
+overridable
 revalidates
 unmock
 withrequired

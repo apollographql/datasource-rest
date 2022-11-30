@@ -19,7 +19,6 @@ dictionaries:
 useGitignore: true
 ignorePaths:
   - cspell.yaml
-  - .changeset/**/*
 
 ignoreRegExpList:
   # GitHub Security Advisories
