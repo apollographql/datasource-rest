@@ -3,15 +3,16 @@ import {
   AuthenticationError,
   CacheOptions,
   DataSourceConfig,
-  RequestDeduplicationPolicy,
   ForbiddenError,
+  RequestDeduplicationPolicy,
   RequestOptions,
   RESTDataSource,
 } from '../RESTDataSource';
 
-import { nockAfterEach, nockBeforeEach } from './nockAssertions';
-import nock from 'nock';
+import FormData from 'form-data';
 import { GraphQLError } from 'graphql';
+import nock from 'nock';
+import { nockAfterEach, nockBeforeEach } from './nockAssertions';
 
 const apiUrl = 'https://api.example.com';
 
@@ -322,7 +323,7 @@ describe('RESTDataSource', () => {
       await dataSource.postFoo(model);
     });
 
-    it('does not serialize a request body that is not an object', async () => {
+    it('does not serialize FormData', async () => {
       const dataSource = new (class extends RESTDataSource {
         override baseURL = 'https://api.example.com';
 
@@ -331,13 +332,15 @@ describe('RESTDataSource', () => {
         }
       })();
 
-      class FormData {}
       const form = new FormData();
+      form.append('foo', 'bar');
 
       nock(apiUrl)
         .post('/foo', (body) => {
-          // body must be falsey here (i.e. empty string)
-          return !body;
+          expect(body).toMatch(
+            'Content-Disposition: form-data; name="foo"\r\n\r\nbar\r\n',
+          );
+          return true;
         })
         .reply(200);
 

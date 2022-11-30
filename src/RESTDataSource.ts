@@ -1,13 +1,13 @@
-import { HTTPCache } from './HTTPCache';
-import { GraphQLError } from 'graphql';
-import type { KeyValueCache } from '@apollo/utils.keyvaluecache';
 import type {
   Fetcher,
   FetcherRequestInit,
-  FetcherResponse,
+  FetcherResponse
 } from '@apollo/utils.fetcher';
+import type { KeyValueCache } from '@apollo/utils.keyvaluecache';
 import type { WithRequired } from '@apollo/utils.withrequired';
+import { GraphQLError } from 'graphql';
 import isPlainObject from 'lodash.isplainobject';
+import { HTTPCache } from './HTTPCache';
 
 type ValueOrPromise<T> = T | Promise<T>;
 
@@ -309,15 +309,17 @@ export abstract class RESTDataSource {
       url.searchParams.append(name, value);
     }
 
-    // We accept arbitrary objects and arrays as body and serialize them as JSON.
-    // `string`, `Buffer`, and `undefined` are passed through up above as-is.
-    if (
-      augmentedRequest.body &&
-      !(augmentedRequest.body instanceof Buffer) &&
-      (isPlainObject(augmentedRequest.body) ||
+    if ((
+        // We accept arbitrary objects and arrays as body and serialize them as JSON.
         Array.isArray(augmentedRequest.body) ||
-        ((augmentedRequest.body as any).toJSON &&
-          typeof (augmentedRequest.body as any).toJSON === 'function'))
+        isPlainObject(augmentedRequest.body) ||
+        // We serialize any objects that have a toJSON method (except Buffer!)
+        (augmentedRequest.body &&
+          typeof augmentedRequest.body === 'object' &&
+          'toJSON' in augmentedRequest.body &&
+          typeof (augmentedRequest.body as any).toJSON === 'function' &&
+          !(augmentedRequest.body instanceof Buffer))
+      )
     ) {
       augmentedRequest.body = JSON.stringify(augmentedRequest.body);
       // If Content-Type header has not been previously set, set to application/json
