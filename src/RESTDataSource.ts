@@ -223,7 +223,7 @@ export abstract class RESTDataSource {
           !(body instanceof Buffer) &&
           // XXX this is a bit of a hacky check for FormData-like objects (in
           // case a FormData implementation has a toJSON method on it)
-          (body as any).constructor.name !== 'FormData')
+          (body as any).constructor?.name !== 'FormData')
       )
     );
   }
