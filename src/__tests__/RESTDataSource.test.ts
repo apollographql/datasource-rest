@@ -3,15 +3,16 @@ import {
   AuthenticationError,
   CacheOptions,
   DataSourceConfig,
-  RequestDeduplicationPolicy,
   ForbiddenError,
+  RequestDeduplicationPolicy,
   RequestOptions,
   RESTDataSource,
 } from '../RESTDataSource';
 
-import { nockAfterEach, nockBeforeEach } from './nockAssertions';
-import nock from 'nock';
+import FormData from 'form-data';
 import { GraphQLError } from 'graphql';
+import nock from 'nock';
+import { nockAfterEach, nockBeforeEach } from './nockAssertions';
 
 const apiUrl = 'https://api.example.com';
 
@@ -322,7 +323,7 @@ describe('RESTDataSource', () => {
       await dataSource.postFoo(model);
     });
 
-    it('does not serialize a request body that is not an object', async () => {
+    it('does not serialize FormData', async () => {
       const dataSource = new (class extends RESTDataSource {
         override baseURL = 'https://api.example.com';
 
@@ -331,10 +332,17 @@ describe('RESTDataSource', () => {
         }
       })();
 
-      class FormData {}
       const form = new FormData();
+      form.append('foo', 'bar');
 
-      nock(apiUrl).post('/foo').reply(200);
+      nock(apiUrl)
+        .post('/foo', (body) => {
+          expect(body).toMatch(
+            'Content-Disposition: form-data; name="foo"\r\n\r\nbar\r\n',
+          );
+          return true;
+        })
+        .reply(200);
 
       await dataSource.postFoo(form);
     });
@@ -380,6 +388,26 @@ describe('RESTDataSource', () => {
         .reply(200, 'ok', { 'content-type': 'text/plain' });
 
       await dataSource.updateFoo(1, Buffer.from(expectedData));
+    });
+
+    it('serializes a request body that is an object with a null prototype', async () => {
+      interface Foo {
+        hello: string;
+      }
+      const dataSource = new (class extends RESTDataSource {
+        override baseURL = 'https://api.example.com';
+
+        postFoo(foo: Foo) {
+          return this.post('foo', { body: foo });
+        }
+      })();
+
+      const foo: Foo = Object.create(null);
+      foo.hello = 'world';
+
+      nock(apiUrl).post('/foo', { hello: 'world' }).reply(200);
+
+      await dataSource.postFoo(foo);
     });
 
     describe('all methods', () => {
@@ -1091,6 +1119,30 @@ describe('RESTDataSource', () => {
             .post('/foo/1', JSON.stringify({ name: 'blah' }))
             .reply(200);
           await dataSource.updateFoo(1, { name: 'blah' });
+        });
+      });
+
+      describe('shouldJSONSerializeBody', () => {
+        it('can be overridden', async () => {
+          let calls = 0;
+          const dataSource = new (class extends RESTDataSource {
+            override baseURL = apiUrl;
+
+            updateFoo(id: number, foo: { name: string }) {
+              return this.post(`foo/${id}`, { body: foo });
+            }
+
+            override shouldJSONSerializeBody(
+              body: string | object | Buffer | undefined,
+            ) {
+              calls++;
+              return super.shouldJSONSerializeBody(body);
+            }
+          })();
+
+          nock(apiUrl).post('/foo/1', { name: 'bar' }).reply(200);
+          await dataSource.updateFoo(1, { name: 'bar' });
+          expect(calls).toBe(1);
         });
       });
     });

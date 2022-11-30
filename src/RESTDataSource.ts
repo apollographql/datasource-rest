@@ -1,12 +1,13 @@
-import { HTTPCache } from './HTTPCache';
-import { GraphQLError } from 'graphql';
-import type { KeyValueCache } from '@apollo/utils.keyvaluecache';
 import type {
   Fetcher,
   FetcherRequestInit,
   FetcherResponse,
 } from '@apollo/utils.fetcher';
+import type { KeyValueCache } from '@apollo/utils.keyvaluecache';
 import type { WithRequired } from '@apollo/utils.withrequired';
+import { GraphQLError } from 'graphql';
+import isPlainObject from 'lodash.isplainobject';
+import { HTTPCache } from './HTTPCache';
 
 type ValueOrPromise<T> = T | Promise<T>;
 
@@ -208,6 +209,25 @@ export abstract class RESTDataSource {
     }
   }
 
+  protected shouldJSONSerializeBody(body: RequestWithBody['body']): boolean {
+    return !!(
+      // We accept arbitrary objects and arrays as body and serialize them as JSON.
+      (
+        Array.isArray(body) ||
+        isPlainObject(body) ||
+        // We serialize any objects that have a toJSON method (except Buffers or things that look like FormData)
+        (body &&
+          typeof body === 'object' &&
+          'toJSON' in body &&
+          typeof (body as any).toJSON === 'function' &&
+          !(body instanceof Buffer) &&
+          // XXX this is a bit of a hacky check for FormData-like objects (in
+          // case a FormData implementation has a toJSON method on it)
+          (body as any).constructor?.name !== 'FormData')
+      )
+    );
+  }
+
   protected async errorFromResponse(response: FetcherResponse) {
     const message = `${response.status}: ${response.statusText}`;
 
@@ -308,16 +328,7 @@ export abstract class RESTDataSource {
       url.searchParams.append(name, value);
     }
 
-    // We accept arbitrary objects and arrays as body and serialize them as JSON.
-    // `string`, `Buffer`, and `undefined` are passed through up above as-is.
-    if (
-      augmentedRequest.body != null &&
-      !(augmentedRequest.body instanceof Buffer) &&
-      (augmentedRequest.body.constructor === Object ||
-        Array.isArray(augmentedRequest.body) ||
-        ((augmentedRequest.body as any).toJSON &&
-          typeof (augmentedRequest.body as any).toJSON === 'function'))
-    ) {
+    if (this.shouldJSONSerializeBody(augmentedRequest.body)) {
       augmentedRequest.body = JSON.stringify(augmentedRequest.body);
       // If Content-Type header has not been previously set, set to application/json
       if (!augmentedRequest.headers) {
