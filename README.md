@@ -2,6 +2,8 @@
 
 This package exports a ([`RESTDataSource`](https://github.com/apollographql/datasource-rest#apollo-rest-data-source)) class which is used for fetching data from a REST API and exposing it via GraphQL within Apollo Server.
 
+RESTDataSource provides two levels of caching: an in-memory "request deduplication" feature primarily used to avoid sending the same GET request multiple times in parallel, and an "HTTP cache" which provides browser-style caching in a (potentially shared) `KeyValueCache` which observes standard HTTP caching headers.
+
 ## Documentation
 
 View the [Apollo Server documentation for data sources](https://www.apollographql.com/docs/apollo-server/features/data-sources/) for more details.
@@ -22,10 +24,7 @@ Your implementation of these methods can call on convenience methods built into 
 const { RESTDataSource } = require('@apollo/datasource-rest');
 
 class MoviesAPI extends RESTDataSource {
-  constructor() {
-    super();
-    this.baseURL = 'https://movies-api.example.com/';
-  }
+  override baseURL = 'https://movies-api.example.com/';
 
   async getMovie(id) {
     return this.get(`movies/${encodeURIComponent(id)}`);
@@ -52,10 +51,8 @@ Optional value to use for all the REST calls. If it is set in your class impleme
 
 ```js title="baseURL.js"
 class MoviesAPI extends RESTDataSource {
-  constructor() {
-    super();
-    this.baseURL = 'https://movies-api.example.com/';
-  }
+  override baseURL = 'https://movies-api.example.com/';
+
   // GET
   async getMovie(id) {
     return this.get(
@@ -74,35 +71,70 @@ In practice, this means that you should usually set `this.baseURL` to the common
 
 If a resource's path starts with something that looks like an URL because it contains a colon and you want it to be added on to the full base URL after its path (so you can't pass it as `this.get('/foo:bar')`), you can pass a path starting with `./`, like `this.get('./foo:bar')`.
 
-##### `memoizeGetRequests`
-By default, `RESTDataSource` caches all outgoing GET **requests** in a separate memoized cache from the regular response cache. It makes the assumption that all responses from HTTP GET calls are cacheable by their URL.
-If a request is made with the same cache key (URL by default) but with an HTTP method other than GET, the cached request is then cleared.
-
-If you would like to disable the GET request cache, set the `memoizeGetRequests` property to `false`. You might want to do this if your API is not actually cacheable or your data changes over time.
-
-```js title="memoizeGetRequests.js"
-class MoviesAPI extends RESTDataSource {
-  constructor() {
-    super();
-    // Defaults to true
-    this.memoizeGetRequests = false;
-  }
-
-  // Outgoing requests are never cached, however the response cache is still enabled
-  async getMovie(id) {
-    return this.get(
-      `https://movies-api.example.com/movies/${encodeURIComponent(id)}` // path
-    );
-  }
-}
-```
 
 #### Methods
 
 ##### `cacheKeyFor`
-By default, `RESTDatasource` uses the full request URL as the cache key. Override this method to remove query parameters or compute a custom cache key.
+By default, `RESTDatasource` uses the full request URL as a cache key when saving information about the request to the `KeyValueCache`. Override this method to remove query parameters or compute a custom cache key.
 
-For example, you could use this to use header fields as part of the cache key. Even though we do validate header fields and don't serve responses from cache when they don't match, new responses overwrite old ones with different header fields.
+For example, you could use this to use header fields or the HTTP method as part of the cache key. Even though we do validate header fields and don't serve responses from cache when they don't match, new responses overwrite old ones with different header fields. (For the HTTP method, this might be a positive thing, as you may want a `POST /foo` request to stop a previously cached `GET /foo` from being returned.)
+
+##### `requestDeduplicationPolicyFor`
+
+By default, `RESTDataSource` de-duplicates all **concurrent** outgoing **GET requests** in an in-memory cache, separate from the `KeyValueCache` used for the HTTP response cache. It makes the assumption that two HTTP GET requests to the same URL made in parallel can share the same response. When the GET request returns, its response is delivered to each caller that requested the same URL concurrently, and then it is removed from the cache.
+
+If a request is made with the same cache key (URL by default) but with an HTTP method other than GET, deduplication of the in-flight request is invalidated: the next parallel `GET` request for the same URL will make a new request.
+
+You can configure this behavior in several ways:
+- You can change which requests are de-deduplicated and which are not.
+- You can tell `RESTDataSource` to de-duplicate a request against new requests that start after it completes, not just overlapping requests. (This was the poorly-documented behavior of `RESTDataSource` prior to v5.0.0.)
+- You can control the "deduplication key" independently from the `KeyValueCache` cache key.
+
+You do this by overriding the `requestDeduplicationPolicyFor` method in your class. This method takes an URL and a request, and returns a policy object with one of three forms:
+
+- `{policy: 'deduplicate-during-request-lifetime', deduplicationKey: string}`: This is the default behavior for GET requests. If a request with the same deduplication key is in progress, share its result. Otherwise, start a request, allow other requests to de-duplicate against it while it is running, and forget about it once the request returns successfully.
+- `{policy: 'deduplicate-until-invalidated', deduplicationKey: string}`: This was the default behavior for GET requests in versions prior to v5. If a request with the same deduplication key is in progress, share its result. Otherwise, start a request and allow other requests to de-duplicate against it while it is running. All future requests with policy `deduplicate-during-request-lifetime` or `deduplicate-until-invalidated` with the same `deduplicationKey` will share the same result until a request is started with policy `do-not-deduplicate` and a matching entry in `invalidateDeduplicationKeys`.
+- `{ policy: 'do-not-deduplicate'; invalidateDeduplicationKeys?: string[] }`: This is the default behavior for non-GET requests. Always run an actual HTTP request and don't allow other requests to de-duplicate against it. Additionally, invalidate any listed keys immediately: new requests with that `deduplicationKey` will not match any requests that currently exist in the request cache.
+
+The default implementation of this method is:
+
+```ts
+protected requestDeduplicationPolicyFor(
+  url: URL,
+  request: RequestOptions,
+): RequestDeduplicationPolicy {
+  // Start with the cache key that is used for the shared header-sensitive
+  // cache. Note that its default implementation does not include the HTTP
+  // method, so if a subclass overrides this and allows non-GETs to be
+  // de-duplicated it will be important for it to include (at least!) the
+  // method in the deduplication key, so we're explicitly adding GET here.
+  const cacheKey = this.cacheKeyFor(url, request);
+  if (request.method === 'GET') {
+    return {
+      policy: 'deduplicate-during-request-lifetime',
+      deduplicationKey: `${request.method} ${cacheKey}`,
+    };
+  } else {
+    return {
+      policy: 'do-not-deduplicate',
+      // Always invalidate GETs when a different method is seen on the same
+      // cache key (ie, URL), as per standard HTTP semantics. (We don't have
+      // to invalidate the key with this HTTP method because we never write
+      // it.)
+      invalidateDeduplicationKeys: [`GET ${cacheKey}`],
+    };
+  }
+```
+
+To fully disable de-duplication, just always return `do-not-duplicate`. (This does not affect the HTTP header-sensitive cache.)
+
+```ts
+class MoviesAPI extends RESTDataSource {
+  protected override requestDeduplicationPolicyFor() {
+    return { policy: 'do-not-deduplicate' } as const;
+  }
+}
+```
 
 ##### `willSendRequest`
 This method is invoked at the beginning of processing each request. It's called
@@ -136,10 +168,7 @@ The `get` method on the [`RESTDataSource`](https://github.com/apollographql/data
 
 ```javascript
 class MoviesAPI extends RESTDataSource {
-  constructor() {
-    super();
-    this.baseURL = 'https://movies-api.example.com/';
-  }
+  override baseURL = 'https://movies-api.example.com/';
 
   // an example making an HTTP POST request
   async postMovie(movie) {
@@ -207,8 +236,10 @@ import { RESTDataSource, AugmentedRequest } from '@apollo/datasource-rest';
 class PersonalizationAPI extends RESTDataSource {
   override baseURL = 'https://personalization-api.example.com/';
 
-  constructor(private token: string) {
-    super();
+  private token: string;
+  constructor(options: { cache: KeyValueCache; token: string}) {
+    super(options);
+    this.token = options.token;
   }
 
   override willSendRequest(_path: string, request: AugmentedRequest) {
@@ -222,11 +253,9 @@ class PersonalizationAPI extends RESTDataSource {
 In some cases, you'll want to set the URL based on the environment or other contextual values. To do this, you can override `resolveURL`:
 
 ```ts
-class PersonalizationAPI extends RESTDataSource {
-  constructor(private token: string) {
-    super();
-  }
+import type { KeyValueCache } from '@apollo/utils.keyvaluecache';
 
+class PersonalizationAPI extends RESTDataSource {
   override async resolveURL(path: string, _request: AugmentedRequest) {
     if (!this.baseURL) {
       const addresses = await resolveSrv(path.split("/")[1] + ".service.consul");
