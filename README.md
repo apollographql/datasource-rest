@@ -162,6 +162,13 @@ If you override this behavior, be sure to implement the proper error handling.
 ##### `didEncounterError`
 By default, this method just throws the `error` it was given. If you override this method, you can choose to either perform some additional logic and still throw, or to swallow the error by not throwing the error result.
 
+#### `shouldJSONSerializeBody`
+By default, this method returns `true` if the request body is:
+- a plain object or an array
+- an object with a `toJSON` method (which isn't a `Buffer` or an instance of a class named `FormData`)
+
+You can override this method in order to serialize other objects such as custom classes as JSON.
+
 ### HTTP Methods
 
 The `get` method on the [`RESTDataSource`](https://github.com/apollographql/datasource-rest/tree/main/src/RESTDataSource.ts) makes an HTTP `GET` request. Similarly, there are methods built-in to allow for `POST`, `PUT`, `PATCH`, and `DELETE` requests.

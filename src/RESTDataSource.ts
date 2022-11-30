@@ -209,6 +209,25 @@ export abstract class RESTDataSource {
     }
   }
 
+  protected shouldJSONSerializeBody(body: RequestWithBody['body']): boolean {
+    return !!(
+      // We accept arbitrary objects and arrays as body and serialize them as JSON.
+      (
+        Array.isArray(body) ||
+        isPlainObject(body) ||
+        // We serialize any objects that have a toJSON method (except Buffers or things that look like FormData)
+        (body &&
+          typeof body === 'object' &&
+          'toJSON' in body &&
+          typeof (body as any).toJSON === 'function' &&
+          !(body instanceof Buffer) &&
+          // XXX this is a bit of a hacky check for FormData-like objects (in
+          // case a FormData implementation has a toJSON method on it)
+          (body as any).constructor.name !== 'FormData')
+      )
+    );
+  }
+
   protected async errorFromResponse(response: FetcherResponse) {
     const message = `${response.status}: ${response.statusText}`;
 
@@ -309,17 +328,7 @@ export abstract class RESTDataSource {
       url.searchParams.append(name, value);
     }
 
-    if (
-      // We accept arbitrary objects and arrays as body and serialize them as JSON.
-      Array.isArray(augmentedRequest.body) ||
-      isPlainObject(augmentedRequest.body) ||
-      // We serialize any objects that have a toJSON method (except Buffer!)
-      (augmentedRequest.body &&
-        typeof augmentedRequest.body === 'object' &&
-        'toJSON' in augmentedRequest.body &&
-        typeof (augmentedRequest.body as any).toJSON === 'function' &&
-        !(augmentedRequest.body instanceof Buffer))
-    ) {
+    if (this.shouldJSONSerializeBody(augmentedRequest.body)) {
       augmentedRequest.body = JSON.stringify(augmentedRequest.body);
       // If Content-Type header has not been previously set, set to application/json
       if (!augmentedRequest.headers) {

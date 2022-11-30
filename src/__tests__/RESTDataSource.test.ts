@@ -1121,6 +1121,32 @@ describe('RESTDataSource', () => {
           await dataSource.updateFoo(1, { name: 'blah' });
         });
       });
+
+      describe('shouldJSONSerializeBody', () => {
+        it('can be overridden', async () => {
+          let calls = 0;
+          const dataSource = new (class extends RESTDataSource {
+            override baseURL = apiUrl;
+
+            updateFoo(id: number, foo: { name: string }) {
+              return this.post(`foo/${id}`, { body: foo });
+            }
+
+            override shouldJSONSerializeBody(
+              body: string | object | Buffer | undefined,
+            ) {
+              calls++;
+              return super.shouldJSONSerializeBody(body);
+            }
+          })();
+
+          nock(apiUrl)
+            .post('/foo/1', { name: 'bar' })
+            .reply(200);
+          await dataSource.updateFoo(1, { name: 'bar' });
+          expect(calls).toBe(1);
+        });
+      })
     });
   });
 });
