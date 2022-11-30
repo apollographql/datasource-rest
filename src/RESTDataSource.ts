@@ -368,8 +368,10 @@ export abstract class RESTDataSource {
       );
       try {
         // The request promise needs to be awaited here rather than just
-        // returned so that we can guarantee the deduplication cache is cleared
-        // in the event of an error during the request.
+        // returned. This ensures that the request completes before it's removed
+        // from the cache. Additionally, the use of finally here guarantees the
+        // deduplication cache is cleared in the event of an error during the
+        // request.
         return await thisRequestPromise;
       } finally {
         if (policy.policy === 'deduplicate-during-request-lifetime') {
