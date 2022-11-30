@@ -1,7 +1,7 @@
 import type {
   Fetcher,
   FetcherRequestInit,
-  FetcherResponse
+  FetcherResponse,
 } from '@apollo/utils.fetcher';
 import type { KeyValueCache } from '@apollo/utils.keyvaluecache';
 import type { WithRequired } from '@apollo/utils.withrequired';
@@ -309,17 +309,16 @@ export abstract class RESTDataSource {
       url.searchParams.append(name, value);
     }
 
-    if ((
-        // We accept arbitrary objects and arrays as body and serialize them as JSON.
-        Array.isArray(augmentedRequest.body) ||
-        isPlainObject(augmentedRequest.body) ||
-        // We serialize any objects that have a toJSON method (except Buffer!)
-        (augmentedRequest.body &&
-          typeof augmentedRequest.body === 'object' &&
-          'toJSON' in augmentedRequest.body &&
-          typeof (augmentedRequest.body as any).toJSON === 'function' &&
-          !(augmentedRequest.body instanceof Buffer))
-      )
+    if (
+      // We accept arbitrary objects and arrays as body and serialize them as JSON.
+      Array.isArray(augmentedRequest.body) ||
+      isPlainObject(augmentedRequest.body) ||
+      // We serialize any objects that have a toJSON method (except Buffer!)
+      (augmentedRequest.body &&
+        typeof augmentedRequest.body === 'object' &&
+        'toJSON' in augmentedRequest.body &&
+        typeof (augmentedRequest.body as any).toJSON === 'function' &&
+        !(augmentedRequest.body instanceof Buffer))
     ) {
       augmentedRequest.body = JSON.stringify(augmentedRequest.body);
       // If Content-Type header has not been previously set, set to application/json
