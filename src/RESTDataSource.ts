@@ -348,7 +348,6 @@ export abstract class RESTDataSource {
             cacheOptions,
           });
 
-
           if (this.didReceiveResponse) {
             await this.didReceiveResponse(response.clone(), outgoingRequest);
           }
