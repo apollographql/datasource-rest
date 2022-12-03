@@ -66,12 +66,14 @@ describe('HTTPCache', () => {
   it('returns a cached response when not expired', async () => {
     mockGetAdaLovelace({ 'cache-control': 'max-age=30' });
 
-    await httpCache.fetch(adaUrl);
+    const firstResponse = await httpCache.fetch(adaUrl);
+    expect(firstResponse.url).toBe(adaUrl.toString());
 
     jest.advanceTimersByTime(10000);
 
     const response = await httpCache.fetch(adaUrl);
 
+    expect(response.url).toBe(adaUrl.toString());
     expect(await response.json()).toEqual({ name: 'Ada Lovelace' });
     expect(response.headers.get('age')).toEqual('10');
   });
