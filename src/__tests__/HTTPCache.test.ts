@@ -283,7 +283,7 @@ describe('HTTPCache', () => {
     expect(await response.json()).toEqual({ name: 'Ada Lovelace' });
   });
 
-  it('does not store a response to a non-GET request', async () => {
+  it('does not store a response to a non-GET/HEAD request', async () => {
     nock(apiUrl)
       .post(adaPath)
       .reply(200, { name: 'Ada Lovelace' }, { 'cache-control': 'max-age=30' });
@@ -515,5 +515,24 @@ describe('HTTPCache', () => {
     const response = await customHttpCache.fetch(adaUrl);
 
     expect(await response.json()).toEqual({ name: 'Ada Lovelace' });
+  });
+
+  describe('HEAD requests', () => {
+    it('returns a cached GET response when the method is HEAD', async () => {
+      mockGetAdaLovelace();
+
+      await httpCache.fetch(adaUrl, {}, { cacheOptions: { ttl: 30000 } });
+
+      const headResponse = await httpCache.fetch(adaUrl, {
+        method: 'HEAD',
+      });
+
+      expect(headResponse.status).toEqual(200);
+      expect(await headResponse.json()).toMatchInlineSnapshot(`
+        {
+          "name": "Ada Lovelace",
+        }
+      `);
+    });
   });
 });

@@ -11,6 +11,7 @@ import FormData from 'form-data';
 import { GraphQLError } from 'graphql';
 import nock from 'nock';
 import { nockAfterEach, nockBeforeEach } from './nockAssertions';
+import type { WithRequired } from '@apollo/utils.withrequired';
 
 const apiUrl = 'https://api.example.com';
 
@@ -646,7 +647,7 @@ describe('RESTDataSource', () => {
           override baseURL = 'https://api.example.com';
           protected override requestDeduplicationPolicyFor(
             url: URL,
-            request: RequestOptions,
+            request: WithRequired<RequestOptions, 'method'>,
           ): RequestDeduplicationPolicy {
             const p = super.requestDeduplicationPolicyFor(url, request);
             return p.policy === 'deduplicate-during-request-lifetime'
@@ -726,7 +727,7 @@ describe('RESTDataSource', () => {
           override baseURL = 'https://api.example.com';
           protected override requestDeduplicationPolicyFor(
             url: URL,
-            request: RequestOptions,
+            request: WithRequired<RequestOptions, 'method'>,
           ): RequestDeduplicationPolicy {
             const p = super.requestDeduplicationPolicyFor(url, request);
             return p.policy === 'deduplicate-during-request-lifetime'
@@ -752,6 +753,39 @@ describe('RESTDataSource', () => {
 
         await dataSource.getFoo(1);
         await dataSource.postFoo(1);
+        await dataSource.getFoo(1);
+      });
+
+      it('HEAD request does not invalidate deduplication of request with the same cache key with deduplicate-until-invalidated', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+          protected override requestDeduplicationPolicyFor(
+            url: URL,
+            request: WithRequired<RequestOptions, 'method'>,
+          ): RequestDeduplicationPolicy {
+            const p = super.requestDeduplicationPolicyFor(url, request);
+            return p.policy === 'deduplicate-during-request-lifetime'
+              ? {
+                  policy: 'deduplicate-until-invalidated',
+                  deduplicationKey: p.deduplicationKey,
+                }
+              : p;
+          }
+
+          getFoo(id: number) {
+            return this.get(`foo/${id}`);
+          }
+
+          headFoo(id: number) {
+            return this.head(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(200);
+        nock(apiUrl).head('/foo/1').reply(200);
+
+        await dataSource.getFoo(1);
+        await dataSource.headFoo(1);
         await dataSource.getFoo(1);
       });
 
@@ -1138,6 +1172,53 @@ describe('RESTDataSource', () => {
         // Call a second time which should be not be cached because of
         // `set-cookie` with `shared: true`. (Note the `.times(2)` above.)
         await dataSource.getFoo(2, true);
+    });
+
+    describe('HEAD requests', () => {
+      it('Uses cached GET results when TTL override is provided', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = apiUrl;
+
+          getFoo(id: number) {
+            return this.get(`foo/${id}`, {
+              cacheOptions: { ttl: 3000 },
+            });
+          }
+
+          headFoo(id: number) {
+            return this.head(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(200);
+
+        await dataSource.getFoo(1);
+        await dataSource.headFoo(1);
+        await dataSource.getFoo(1);
+      });
+
+      it('Does not cache HEAD results even when TTL override is provided', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = apiUrl;
+
+          getFoo(id: number) {
+            return this.get(`foo/${id}`, {
+              cacheOptions: { ttl: 3000 },
+            });
+          }
+
+          headFoo(id: number) {
+            return this.head(`foo/${id}`, {
+              cacheOptions: { ttl: 3000 },
+            });
+          }
+        })();
+
+        nock(apiUrl).head('/foo/1').reply(200);
+        nock(apiUrl).get('/foo/1').reply(200, { foo: 'bar' });
+
+        await dataSource.headFoo(1);
+        await dataSource.getFoo(1);
       });
     });
 
