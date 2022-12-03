@@ -1,16 +1,16 @@
 import fetch from 'node-fetch';
 import nock from 'nock';
 import { HTTPCache } from '../HTTPCache';
-import { MapKeyValueCache } from './MapKeyValueCache';
 import { nockAfterEach, nockBeforeEach } from './nockAssertions';
+import { FakeableTTLTestingCache } from './FakeableTTLTestingCache';
 
 describe('HTTPCache', () => {
-  let store: MapKeyValueCache<string>;
+  let store: FakeableTTLTestingCache;
   let httpCache: HTTPCache;
 
   beforeEach(() => {
     nockBeforeEach();
-    store = new MapKeyValueCache<string>();
+    store = new FakeableTTLTestingCache();
     httpCache = new HTTPCache(store, fetch);
   });
 
@@ -92,7 +92,7 @@ describe('HTTPCache', () => {
     );
 
     expect(await response.json()).toEqual({ name: 'Alan Turing' });
-    expect(response.headers.get('age')).toEqual('0');
+    expect(response.headers.get('age')).toBeNull();
   });
 
   describe('overriding TTL', () => {
@@ -148,7 +148,7 @@ describe('HTTPCache', () => {
       );
 
       expect(await response.json()).toEqual({ name: 'Alan Turing' });
-      expect(response.headers.get('age')).toEqual('0');
+      expect(response.headers.get('age')).toBeNull();
     });
 
     it('fetches a fresh response from the origin when the overridden TTL expired even if a longer max-age has been specified', async () => {
@@ -175,7 +175,7 @@ describe('HTTPCache', () => {
       );
 
       expect(await response.json()).toEqual({ name: 'Alan Turing' });
-      expect(response.headers.get('age')).toEqual('0');
+      expect(response.headers.get('age')).toBeNull();
     });
 
     it('does not store a response with an overridden TTL and a non-success status code', async () => {
@@ -191,7 +191,7 @@ describe('HTTPCache', () => {
         },
       );
 
-      expect(store.size).toEqual(0);
+      expect(store.isEmpty()).toBe(true);
     });
 
     it('allows overriding the TTL dynamically', async () => {
@@ -231,7 +231,7 @@ describe('HTTPCache', () => {
         },
       );
 
-      expect(store.size).toEqual(0);
+      expect(store.isEmpty()).toBe(true);
     });
   });
 
@@ -263,7 +263,7 @@ describe('HTTPCache', () => {
 
     await httpCache.fetch(adaUrl, { method: 'POST' });
 
-    expect(store.size).toEqual(0);
+    expect(store.isEmpty()).toBe(true);
   });
 
   it('does not store a response with a non-success status code', async () => {
@@ -271,7 +271,7 @@ describe('HTTPCache', () => {
 
     await httpCache.fetch(adaUrl);
 
-    expect(store.size).toEqual(0);
+    expect(store.isEmpty()).toBe(true);
   });
 
   it('does not store a response without cache-control header', async () => {
@@ -279,7 +279,7 @@ describe('HTTPCache', () => {
 
     await httpCache.fetch(adaUrl);
 
-    expect(store.size).toEqual(0);
+    expect(store.isEmpty()).toBe(true);
   });
 
   it('does not store a private response', async () => {
@@ -287,7 +287,7 @@ describe('HTTPCache', () => {
 
     await httpCache.fetch(adaUrl);
 
-    expect(store.size).toEqual(0);
+    expect(store.isEmpty()).toBe(true);
   });
 
   it('returns a cached response when vary header fields match', async () => {
@@ -360,15 +360,25 @@ describe('HTTPCache', () => {
     storeSet.mockRestore();
   });
 
-  it('revalidates a cached response when expired and returns the cached response when not modified', async () => {
+  it('revalidates a cached response when expired and returns the cached response when not modified via etag', async () => {
     mockGetAdaLovelace({
       'cache-control': 'public, max-age=30',
       etag: 'foo',
     });
 
-    await httpCache.fetch(adaUrl);
+    const response0 = await httpCache.fetch(adaUrl);
+    expect(response0.status).toEqual(200);
+    expect(await response0.json()).toEqual({ name: 'Ada Lovelace' });
+    expect(response0.headers.get('age')).toBeNull();
 
-    jest.advanceTimersByTime(30000);
+    jest.advanceTimersByTime(10000);
+
+    const response1 = await httpCache.fetch(adaUrl);
+    expect(response1.status).toEqual(200);
+    expect(await response1.json()).toEqual({ name: 'Ada Lovelace' });
+    expect(response1.headers.get('age')).toEqual('10');
+
+    jest.advanceTimersByTime(21000);
 
     nock(apiUrl)
       .get(adaPath)
@@ -376,6 +386,49 @@ describe('HTTPCache', () => {
       .reply(304, undefined, {
         'cache-control': 'public, max-age=30',
         etag: 'foo',
+      });
+
+    const response = await httpCache.fetch(adaUrl);
+
+    expect(response.status).toEqual(200);
+    expect(await response.json()).toEqual({ name: 'Ada Lovelace' });
+    expect(response.headers.get('age')).toEqual('0');
+
+    jest.advanceTimersByTime(10000);
+
+    const response2 = await httpCache.fetch(adaUrl);
+
+    expect(response2.status).toEqual(200);
+    expect(await response2.json()).toEqual({ name: 'Ada Lovelace' });
+    expect(response2.headers.get('age')).toEqual('10');
+  });
+
+  it('revalidates a cached response when expired and returns the cached response when not modified via last-modified', async () => {
+    mockGetAdaLovelace({
+      'cache-control': 'public, max-age=30',
+      'last-modified': 'Wed, 21 Oct 2015 07:28:00 GMT',
+    });
+
+    const response0 = await httpCache.fetch(adaUrl);
+    expect(response0.status).toEqual(200);
+    expect(await response0.json()).toEqual({ name: 'Ada Lovelace' });
+    expect(response0.headers.get('age')).toBeNull();
+
+    jest.advanceTimersByTime(10000);
+
+    const response1 = await httpCache.fetch(adaUrl);
+    expect(response1.status).toEqual(200);
+    expect(await response1.json()).toEqual({ name: 'Ada Lovelace' });
+    expect(response1.headers.get('age')).toEqual('10');
+
+    jest.advanceTimersByTime(21000);
+
+    nock(apiUrl)
+      .get(adaPath)
+      .matchHeader('if-modified-since', 'Wed, 21 Oct 2015 07:28:00 GMT')
+      .reply(304, undefined, {
+        'cache-control': 'public, max-age=30',
+        'last-modified': 'Wed, 21 Oct 2015 07:28:00 GMT',
       });
 
     const response = await httpCache.fetch(adaUrl);
@@ -430,7 +483,7 @@ describe('HTTPCache', () => {
     mockGetAdaLovelace();
 
     const customFetch = jest.fn(fetch);
-    const customHttpCache = new HTTPCache(store as any, customFetch);
+    const customHttpCache = new HTTPCache(store, customFetch);
 
     const response = await customHttpCache.fetch(adaUrl);
 
