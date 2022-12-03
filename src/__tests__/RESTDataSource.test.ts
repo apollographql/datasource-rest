@@ -13,6 +13,7 @@ import FormData from 'form-data';
 import { GraphQLError } from 'graphql';
 import nock from 'nock';
 import { nockAfterEach, nockBeforeEach } from './nockAssertions';
+import type { FetcherResponse } from '@apollo/utils.fetcher';
 
 const apiUrl = 'https://api.example.com';
 
@@ -1143,6 +1144,48 @@ describe('RESTDataSource', () => {
           nock(apiUrl).post('/foo/1', { name: 'bar' }).reply(200);
           await dataSource.updateFoo(1, { name: 'bar' });
           expect(calls).toBe(1);
+        });
+      });
+
+      describe('didReceiveResponse', () => {
+        it('can be overridden', async () => {
+          const dataSource = new (class extends RESTDataSource {
+            override baseURL = apiUrl;
+
+            getFoo(id: number) {
+              return this.get(`foo/${id}`);
+            }
+
+            override async didReceiveResponse(
+              response: FetcherResponse,
+              _outgoingRequest: RequestOptions,
+            ) {
+              expect(response.status).toBe(200);
+            }
+          })();
+
+          nock(apiUrl).get('/foo/1').reply(200, { name: 'bar' });
+          await dataSource.getFoo(1);
+        });
+
+        it('is ok to consume the body on the response', async () => {
+          const dataSource = new (class extends RESTDataSource {
+            override baseURL = apiUrl;
+
+            getFoo(id: number) {
+              return this.get(`foo/${id}`);
+            }
+
+            override async didReceiveResponse(
+              response: FetcherResponse,
+              _outgoingRequest: RequestOptions,
+            ) {
+              expect(await response.json()).toEqual({ name: 'bar' });
+            }
+          })();
+
+          nock(apiUrl).get('/foo/1').reply(200, { name: 'bar' });
+          await dataSource.getFoo(1);
         });
       });
     });
