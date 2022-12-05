@@ -13,7 +13,6 @@ import FormData from 'form-data';
 import { GraphQLError } from 'graphql';
 import nock from 'nock';
 import { nockAfterEach, nockBeforeEach } from './nockAssertions';
-import type { FetcherResponse } from '@apollo/utils.fetcher';
 
 const apiUrl = 'https://api.example.com';
 
