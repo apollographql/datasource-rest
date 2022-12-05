@@ -176,17 +176,6 @@ export abstract class RESTDataSource {
     request: FetcherRequestInit,
   ): CacheOptions | undefined;
 
-  protected async didReceiveResponse<TResult = any>(
-    response: FetcherResponse,
-    _request: RequestOptions,
-  ): Promise<TResult> {
-    if (response.ok) {
-      return this.parseBody(response) as any as Promise<TResult>;
-    } else {
-      throw await this.errorFromResponse(response);
-    }
-  }
-
   protected didEncounterError(error: Error, _request: RequestOptions) {
     throw error;
   }
@@ -353,9 +342,15 @@ export abstract class RESTDataSource {
             cacheKey,
             cacheOptions,
           });
-          return await this.didReceiveResponse(response, outgoingRequest);
+
+          if (response.ok) {
+            return (await this.parseBody(response)) as TResult;
+          } else {
+            throw await this.errorFromResponse(response);
+          }
         } catch (error) {
           this.didEncounterError(error as Error, outgoingRequest);
+          throw error;
         }
       });
     };

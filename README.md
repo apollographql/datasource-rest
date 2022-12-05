@@ -154,11 +154,6 @@ override cacheOptionsFor() {
 }
 ```
 
-##### `didReceiveResponse`
-By default, this method checks if the response was returned successfully and parses the response into the result object. If the response had an error, it detects which type of HTTP error and throws the error result.
-
-If you override this behavior, be sure to implement the proper error handling.
-
 ##### `didEncounterError`
 By default, this method just throws the `error` it was given. If you override this method, you can choose to either perform some additional logic and still throw, or to swallow the error by not throwing the error result.
 
