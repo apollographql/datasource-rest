@@ -67,7 +67,10 @@ export class HTTPCache {
     const { policy: policyRaw, ttlOverride, body } = JSON.parse(entry);
 
     const policy = CachePolicy.fromObject(policyRaw);
-    // Remove url from the policy, because otherwise it would never match a request with a custom cache key
+    // Remove url from the policy, because otherwise it would never match a
+    // request with a custom cache key (ie, we want users to be able to tell us
+    // that two requests should be treated as the same even if the URL differs).
+    const urlFromPolicy = policy._url;
     policy._url = undefined;
 
     if (
@@ -79,7 +82,7 @@ export class HTTPCache {
     ) {
       const headers = policy.responseHeaders();
       return new Response(body, {
-        url: policy._url,
+        url: urlFromPolicy,
         status: policy._status,
         headers,
       });
