@@ -306,50 +306,58 @@ export abstract class RESTDataSource {
     path: string,
     request?: GetRequest,
   ): Promise<TResult> {
-    return this.fetchParsedBodyOnly<TResult>(path, {
+    return (await this.fetch<TResult>(path, {
       method: 'GET',
       ...request,
-    });
+    })).parsedBody;
   }
 
   protected async post<TResult = any>(
     path: string,
     request?: RequestWithBody,
   ): Promise<TResult> {
-    return this.fetchParsedBodyOnly<TResult>(path, {
-      method: 'POST',
-      ...request,
-    });
+    return (
+      await this.fetch<TResult>(path, {
+        method: 'POST',
+        ...request,
+      })
+    ).parsedBody;
   }
 
   protected async patch<TResult = any>(
     path: string,
     request?: RequestWithBody,
   ): Promise<TResult> {
-    return this.fetchParsedBodyOnly<TResult>(path, {
-      method: 'PATCH',
-      ...request,
-    });
+    return (
+      await this.fetch<TResult>(path, {
+        method: 'PATCH',
+        ...request,
+      })
+    ).parsedBody;
   }
 
   protected async put<TResult = any>(
     path: string,
     request?: RequestWithBody,
   ): Promise<TResult> {
-    return this.fetchParsedBodyOnly<TResult>(path, {
-      method: 'PUT',
-      ...request,
-    });
+    return (
+      await this.fetch<TResult>(path, {
+        method: 'PUT',
+        ...request,
+      })
+    ).parsedBody;
   }
 
   protected async delete<TResult = any>(
     path: string,
     request?: RequestWithBody,
   ): Promise<TResult> {
-    return this.fetchParsedBodyOnly<TResult>(path, {
-      method: 'DELETE',
-      ...request,
-    });
+    return (
+      await this.fetch<TResult>(path, {
+        method: 'DELETE',
+        ...request,
+      })
+    ).parsedBody;
   }
 
   private urlSearchParamsFromRecord(
@@ -364,13 +372,6 @@ export abstract class RESTDataSource {
       }
     }
     return usp;
-  }
-
-  private async fetchParsedBodyOnly<TResult>(
-    path: string,
-    incomingRequest: DataSourceRequest,
-  ): Promise<TResult> {
-    return (await this.fetch<TResult>(path, incomingRequest)).parsedBody;
   }
 
   public async fetch<TResult>(

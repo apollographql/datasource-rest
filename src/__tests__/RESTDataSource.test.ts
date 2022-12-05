@@ -1172,155 +1172,156 @@ describe('RESTDataSource', () => {
         // Call a second time which should be not be cached because of
         // `set-cookie` with `shared: true`. (Note the `.times(2)` above.)
         await dataSource.getFoo(2, true);
-    });
-
-    describe('HEAD requests', () => {
-      it('Uses cached GET results when TTL override is provided', async () => {
-        const dataSource = new (class extends RESTDataSource {
-          override baseURL = apiUrl;
-
-          getFoo(id: number) {
-            return this.get(`foo/${id}`, {
-              cacheOptions: { ttl: 3000 },
-            });
-          }
-
-          headFoo(id: number) {
-            return this.head(`foo/${id}`);
-          }
-        })();
-
-        nock(apiUrl).get('/foo/1').reply(200);
-
-        await dataSource.getFoo(1);
-        await dataSource.headFoo(1);
-        await dataSource.getFoo(1);
       });
 
-      it('Does not cache HEAD results even when TTL override is provided', async () => {
-        const dataSource = new (class extends RESTDataSource {
-          override baseURL = apiUrl;
-
-          getFoo(id: number) {
-            return this.get(`foo/${id}`, {
-              cacheOptions: { ttl: 3000 },
-            });
-          }
-
-          headFoo(id: number) {
-            return this.head(`foo/${id}`, {
-              cacheOptions: { ttl: 3000 },
-            });
-          }
-        })();
-
-        nock(apiUrl).head('/foo/1').reply(200);
-        nock(apiUrl).get('/foo/1').reply(200, { foo: 'bar' });
-
-        await dataSource.headFoo(1);
-        await dataSource.getFoo(1);
-      });
-    });
-
-    describe('user hooks', () => {
-      describe('willSendRequest', () => {
-        const obj = { foo: 'bar' };
-        const str = 'foo=bar';
-        const buffer = Buffer.from(str);
-
-        it.each([
-          ['object', obj, obj],
-          ['string', str, str],
-          ['buffer', buffer, str],
-        ])(`can set the body to a %s`, async (_, body, expected) => {
+      describe('HEAD requests', () => {
+        it('Uses cached GET results when TTL override is provided', async () => {
           const dataSource = new (class extends RESTDataSource {
             override baseURL = apiUrl;
 
-            updateFoo(id: number, foo: string | Buffer | { foo: string }) {
-              return this.post(`foo/${id}`, { body: foo });
+            getFoo(id: number) {
+              return this.get(`foo/${id}`, {
+                cacheOptions: { ttl: 3000 },
+              });
             }
 
-            override async willSendRequest(
-              path: string,
-              requestOpts: AugmentedRequest,
-            ) {
-              expect(path).toMatch('foo/1');
-              expect(requestOpts.body).toEqual(body);
+            headFoo(id: number) {
+              return this.head(`foo/${id}`);
             }
           })();
 
-          nock(apiUrl).post('/foo/1', expected).reply(200);
-          await dataSource.updateFoo(1, body);
+          nock(apiUrl).get('/foo/1').reply(200);
+
+          await dataSource.getFoo(1);
+          await dataSource.headFoo(1);
+          await dataSource.getFoo(1);
         });
 
-        it('is called with the correct path', async () => {
+        it('Does not cache HEAD results even when TTL override is provided', async () => {
           const dataSource = new (class extends RESTDataSource {
             override baseURL = apiUrl;
 
-            updateFoo(id: number, foo: { foo: string }) {
-              return this.post(`foo/${id}`, { body: foo });
+            getFoo(id: number) {
+              return this.get(`foo/${id}`, {
+                cacheOptions: { ttl: 3000 },
+              });
             }
 
-            override async willSendRequest(
-              path: string,
-              _requestOpts: AugmentedRequest,
-            ) {
-              expect(path).toMatch('foo/1');
+            headFoo(id: number) {
+              return this.head(`foo/${id}`, {
+                cacheOptions: { ttl: 3000 },
+              });
             }
           })();
 
-          nock(apiUrl).post('/foo/1', obj).reply(200);
-          await dataSource.updateFoo(1, obj);
+          nock(apiUrl).head('/foo/1').reply(200);
+          nock(apiUrl).get('/foo/1').reply(200, { foo: 'bar' });
+
+          await dataSource.headFoo(1);
+          await dataSource.getFoo(1);
         });
       });
 
-      describe('resolveURL', () => {
-        it('sees the same request body as provided by the caller', async () => {
-          const dataSource = new (class extends RESTDataSource {
-            override baseURL = apiUrl;
+      describe('user hooks', () => {
+        describe('willSendRequest', () => {
+          const obj = { foo: 'bar' };
+          const str = 'foo=bar';
+          const buffer = Buffer.from(str);
 
-            updateFoo(id: number, foo: { name: string }) {
-              return this.post(`foo/${id}`, { body: foo });
-            }
+          it.each([
+            ['object', obj, obj],
+            ['string', str, str],
+            ['buffer', buffer, str],
+          ])(`can set the body to a %s`, async (_, body, expected) => {
+            const dataSource = new (class extends RESTDataSource {
+              override baseURL = apiUrl;
 
-            override resolveURL(path: string, requestOpts: AugmentedRequest) {
-              expect(requestOpts.body).toMatchInlineSnapshot(`
+              updateFoo(id: number, foo: string | Buffer | { foo: string }) {
+                return this.post(`foo/${id}`, { body: foo });
+              }
+
+              override async willSendRequest(
+                path: string,
+                requestOpts: AugmentedRequest,
+              ) {
+                expect(path).toMatch('foo/1');
+                expect(requestOpts.body).toEqual(body);
+              }
+            })();
+
+            nock(apiUrl).post('/foo/1', expected).reply(200);
+            await dataSource.updateFoo(1, body);
+          });
+
+          it('is called with the correct path', async () => {
+            const dataSource = new (class extends RESTDataSource {
+              override baseURL = apiUrl;
+
+              updateFoo(id: number, foo: { foo: string }) {
+                return this.post(`foo/${id}`, { body: foo });
+              }
+
+              override async willSendRequest(
+                path: string,
+                _requestOpts: AugmentedRequest,
+              ) {
+                expect(path).toMatch('foo/1');
+              }
+            })();
+
+            nock(apiUrl).post('/foo/1', obj).reply(200);
+            await dataSource.updateFoo(1, obj);
+          });
+        });
+
+        describe('resolveURL', () => {
+          it('sees the same request body as provided by the caller', async () => {
+            const dataSource = new (class extends RESTDataSource {
+              override baseURL = apiUrl;
+
+              updateFoo(id: number, foo: { name: string }) {
+                return this.post(`foo/${id}`, { body: foo });
+              }
+
+              override resolveURL(path: string, requestOpts: AugmentedRequest) {
+                expect(requestOpts.body).toMatchInlineSnapshot(`
                 {
                   "name": "blah",
                 }
               `);
-              return super.resolveURL(path, requestOpts);
-            }
-          })();
+                return super.resolveURL(path, requestOpts);
+              }
+            })();
 
-          nock(apiUrl)
-            .post('/foo/1', JSON.stringify({ name: 'blah' }))
-            .reply(200);
-          await dataSource.updateFoo(1, { name: 'blah' });
+            nock(apiUrl)
+              .post('/foo/1', JSON.stringify({ name: 'blah' }))
+              .reply(200);
+            await dataSource.updateFoo(1, { name: 'blah' });
+          });
         });
-      });
 
-      describe('shouldJSONSerializeBody', () => {
-        it('can be overridden', async () => {
-          let calls = 0;
-          const dataSource = new (class extends RESTDataSource {
-            override baseURL = apiUrl;
+        describe('shouldJSONSerializeBody', () => {
+          it('can be overridden', async () => {
+            let calls = 0;
+            const dataSource = new (class extends RESTDataSource {
+              override baseURL = apiUrl;
 
-            updateFoo(id: number, foo: { name: string }) {
-              return this.post(`foo/${id}`, { body: foo });
-            }
+              updateFoo(id: number, foo: { name: string }) {
+                return this.post(`foo/${id}`, { body: foo });
+              }
 
-            override shouldJSONSerializeBody(
-              body: string | object | Buffer | undefined,
-            ) {
-              calls++;
-              return super.shouldJSONSerializeBody(body);
-            }
-          })();
+              override shouldJSONSerializeBody(
+                body: string | object | Buffer | undefined,
+              ) {
+                calls++;
+                return super.shouldJSONSerializeBody(body);
+              }
+            })();
 
-          nock(apiUrl).post('/foo/1', { name: 'bar' }).reply(200);
-          await dataSource.updateFoo(1, { name: 'bar' });
-          expect(calls).toBe(1);
+            nock(apiUrl).post('/foo/1', { name: 'bar' }).reply(200);
+            await dataSource.updateFoo(1, { name: 'bar' });
+            expect(calls).toBe(1);
+          });
         });
       });
     });
