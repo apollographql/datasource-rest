@@ -1146,47 +1146,6 @@ describe('RESTDataSource', () => {
           expect(calls).toBe(1);
         });
       });
-
-      describe('didReceiveResponse', () => {
-        it('is called if implemented', async () => {
-          const didReceiveResponseMock = jest.fn(async () => {});
-          const dataSource = new (class extends RESTDataSource {
-            override baseURL = apiUrl;
-
-            getFoo(id: number) {
-              return this.get(`foo/${id}`);
-            }
-
-            override didReceiveResponse = didReceiveResponseMock;
-          })();
-
-          nock(apiUrl).get('/foo/1').reply(200, { name: 'bar' });
-          await dataSource.getFoo(1);
-          expect(didReceiveResponseMock).toHaveBeenCalledTimes(1);
-        });
-
-        it('is ok to consume the body on the response', async () => {
-          let observedBody;
-          const dataSource = new (class extends RESTDataSource {
-            override baseURL = apiUrl;
-
-            getFoo(id: number) {
-              return this.get(`foo/${id}`);
-            }
-
-            override async didReceiveResponse(
-              response: FetcherResponse,
-              _outgoingRequest: RequestOptions,
-            ) {
-              observedBody = await response.json();
-            }
-          })();
-
-          nock(apiUrl).get('/foo/1').reply(200, { name: 'bar' });
-          await dataSource.getFoo(1);
-          expect(observedBody).toEqual({ name: 'bar' });
-        });
-      });
     });
   });
 });

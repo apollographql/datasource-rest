@@ -176,11 +176,6 @@ export abstract class RESTDataSource {
     request: FetcherRequestInit,
   ): CacheOptions | undefined;
 
-  protected async didReceiveResponse?(
-    response: FetcherResponse,
-    request: RequestOptions,
-  ): Promise<void>;
-
   protected didEncounterError(error: Error, _request: RequestOptions) {
     throw error;
   }
@@ -347,10 +342,6 @@ export abstract class RESTDataSource {
             cacheKey,
             cacheOptions,
           });
-
-          if (this.didReceiveResponse) {
-            await this.didReceiveResponse(response.clone(), outgoingRequest);
-          }
 
           if (response.ok) {
             return (await this.parseBody(response)) as TResult;
