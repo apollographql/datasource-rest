@@ -1,5 +1,6 @@
 import fetch, { Response } from 'node-fetch';
 import CachePolicy from 'http-cache-semantics';
+import type { Options as HttpCacheSemanticsOptions } from 'http-cache-semantics';
 import type {
   Fetcher,
   FetcherResponse,
@@ -49,6 +50,7 @@ export class HTTPCache {
             response: FetcherResponse,
             request: RequestOptions,
           ) => CacheOptions | undefined);
+      httpCacheSemanticsCachePolicyOptions?: HttpCacheSemanticsOptions;
     },
   ): Promise<FetcherResponse> {
     const urlString = url.toString();
@@ -64,6 +66,7 @@ export class HTTPCache {
       const policy = new CachePolicy(
         policyRequestFrom(urlString, requestOpts),
         policyResponseFrom(response),
+        cache?.httpCacheSemanticsCachePolicyOptions,
       ) as SneakyCachePolicy;
 
       return this.storeResponseAndReturnClone(

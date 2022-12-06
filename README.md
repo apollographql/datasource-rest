@@ -146,6 +146,8 @@ the [intercepting fetches](#intercepting-fetches) section for usage examples.
 ##### `cacheOptionsFor`
 Allows setting the `CacheOptions` to be used for each request/response in the HTTPCache. This is separate from the request-only cache. You can use this to set the TTL to a value in seconds. If you return `{ttl: 0}`, the response will not be stored. If you return a positive number for `ttl` and the operation returns a 2xx status code, then the response *will* be cached, regardless of HTTP headers or method: make sure this is what you intended! (There is currently no way to say "only cache responses that should be cached according to HTTP headers, but change the TTL to something specific".) Note that if you do not specify `ttl` here, only `GET` requests are cached.
 
+You can also specify `cacheOptions` as part of the "request" in any call to `get()`, `post()`, etc. This can either be an object such as `{ttl: 1}`, or a function returning that object. If `cacheOptions` is provided, `cacheOptionsFor` is not called (ie, `this.cacheOptionsFor` is effectively the default value of `cacheOptions`).
+
 ```javascript
 override cacheOptionsFor() {
   return {

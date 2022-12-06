@@ -1042,6 +1042,38 @@ describe('RESTDataSource', () => {
 
         jest.useRealTimers();
       });
+
+      it('allows options to be passed to http-cache-semantics', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          getFoo(id: number, shared: boolean) {
+            return this.get(`foo/${id}`, {
+              httpCacheSemanticsCachePolicyOptions: { shared },
+            });
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(200, '{}', {
+          'Cache-Control': 'max-age=60,must-revalidate',
+          'set-cookie':
+            'whatever=blah; expires=Mon, 01-Jan-2050 00:00:00 GMT; path=/; domain=www.example.com',
+        });
+        await dataSource.getFoo(1, false);
+        // Call a second time which should be cached despite `set-cookie` due to
+        // `shared: false`.
+        await dataSource.getFoo(1, false);
+
+        nock(apiUrl).get('/foo/2').times(2).reply(200, '{}', {
+          'Cache-Control': 'max-age=60,must-revalidate',
+          'set-cookie':
+            'whatever=blah; expires=Mon, 01-Jan-2050 00:00:00 GMT; path=/; domain=www.example.com',
+        });
+        await dataSource.getFoo(2, true);
+        // Call a second time which should be not be cached because of
+        // `set-cookie` with `shared: true`. (Note the `.times(2)` above.)
+        await dataSource.getFoo(2, true);
+      });
     });
 
     describe('user hooks', () => {
