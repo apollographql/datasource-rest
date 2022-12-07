@@ -1,5 +1,6 @@
 import fetch, { Response } from 'node-fetch';
 import CachePolicy from 'http-cache-semantics';
+import type { Options as HttpCacheSemanticsOptions } from 'http-cache-semantics';
 import type {
   Fetcher,
   FetcherResponse,
@@ -11,6 +12,16 @@ import {
   PrefixingKeyValueCache,
 } from '@apollo/utils.keyvaluecache';
 import type { CacheOptions, RequestOptions } from './RESTDataSource';
+
+// We want to use a couple internal properties of CachePolicy. (We could get
+// `_url` and `_status` off of the serialized CachePolicyObject, but `age()` is
+// just missing from `@types/http-cache-semantics` for now.) So we just cast to
+// this interface for now.
+interface SneakyCachePolicy extends CachePolicy {
+  _url: string | undefined;
+  _status: number;
+  age(): number;
+}
 
 export class HTTPCache {
   private keyValueCache: KeyValueCache;
@@ -39,6 +50,7 @@ export class HTTPCache {
             response: FetcherResponse,
             request: RequestOptions,
           ) => CacheOptions | undefined);
+      httpCacheSemanticsCachePolicyOptions?: HttpCacheSemanticsOptions;
     },
   ): Promise<FetcherResponse> {
     const urlString = url.toString();
@@ -54,7 +66,8 @@ export class HTTPCache {
       const policy = new CachePolicy(
         policyRequestFrom(urlString, requestOpts),
         policyResponseFrom(response),
-      );
+        cache?.httpCacheSemanticsCachePolicyOptions,
+      ) as SneakyCachePolicy;
 
       return this.storeResponseAndReturnClone(
         urlString,
@@ -68,7 +81,7 @@ export class HTTPCache {
 
     const { policy: policyRaw, ttlOverride, body } = JSON.parse(entry);
 
-    const policy = CachePolicy.fromObject(policyRaw);
+    const policy = CachePolicy.fromObject(policyRaw) as SneakyCachePolicy;
     // Remove url from the policy, because otherwise it would never match a
     // request with a custom cache key (ie, we want users to be able to tell us
     // that two requests should be treated as the same even if the URL differs).
@@ -90,7 +103,7 @@ export class HTTPCache {
       return new Response(body, {
         url: urlFromPolicy,
         status: policy._status,
-        headers,
+        headers: normalizeHeaders(headers),
       });
     } else {
       // We aren't sure that we're allowed to use the cached response, so we are
@@ -113,7 +126,7 @@ export class HTTPCache {
       );
       const revalidationRequest: RequestOptions = {
         ...requestOpts,
-        headers: revalidationHeaders,
+        headers: normalizeHeaders(revalidationHeaders),
       };
       const revalidationResponse = await this.httpFetch(
         urlString,
@@ -123,14 +136,14 @@ export class HTTPCache {
       const { policy: revalidatedPolicy, modified } = policy.revalidatedPolicy(
         policyRequestFrom(urlString, revalidationRequest),
         policyResponseFrom(revalidationResponse),
-      );
+      ) as unknown as { policy: SneakyCachePolicy; modified: boolean };
 
       return this.storeResponseAndReturnClone(
         urlString,
         new Response(modified ? await revalidationResponse.text() : body, {
           url: revalidatedPolicy._url,
           status: revalidatedPolicy._status,
-          headers: revalidatedPolicy.responseHeaders(),
+          headers: normalizeHeaders(revalidatedPolicy.responseHeaders()),
         }),
         requestOpts,
         revalidatedPolicy,
@@ -144,7 +157,7 @@ export class HTTPCache {
     url: string,
     response: FetcherResponse,
     request: RequestOptions,
-    policy: CachePolicy,
+    policy: SneakyCachePolicy,
     cacheKey: string,
     cacheOptions?:
       | CacheOptions
@@ -224,4 +237,24 @@ function policyResponseFrom(response: FetcherResponse) {
     status: response.status,
     headers: Object.fromEntries(response.headers),
   };
+}
+
+// When CachePolicy gives us headers back, it is declared to have the same
+// structure as Node's built in res.headers, where values might be arrays.
+// However, we use fetch to do the actual HTTP calls, and fetch's response
+// headers always map string to string: ie, the input to CachePolicy always
+// comes from `policyResponseFrom` above`. So we can be pretty confident that
+// the values in this map are strings (not arrays or numbers), as long as
+// CachePolicy itself doesn't add arrays or numbers (and it doesn't appear to
+// now). So we just do a cast (after double-checking that we didn't miss
+// something).
+function normalizeHeaders(
+  headers: CachePolicy.Headers,
+): Record<string, string> {
+  for (const [name, value] of Object.entries(headers)) {
+    if (typeof value !== 'string') {
+      throw new Error(`Surprising type ${typeof value} for header ${name}`);
+    }
+  }
+  return headers as Record<string, string>;
 }

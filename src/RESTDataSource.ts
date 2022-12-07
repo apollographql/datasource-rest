@@ -8,6 +8,7 @@ import type { WithRequired } from '@apollo/utils.withrequired';
 import { GraphQLError } from 'graphql';
 import isPlainObject from 'lodash.isplainobject';
 import { HTTPCache } from './HTTPCache';
+import type { Options as HttpCacheSemanticsOptions } from 'http-cache-semantics';
 
 type ValueOrPromise<T> = T | Promise<T>;
 
@@ -21,6 +22,13 @@ export type RequestOptions = FetcherRequestInit & {
    * TypeScript by @types/node.)
    */
   params?: Record<string, string | undefined> | URLSearchParams;
+  /**
+   * This can be a `CacheOptions` object or a function returning such an object.
+   * The details of what its fields mean are documented under `CacheOptions`.
+   * The function is called after a real HTTP request is made (and is not called
+   * if a response from the cache can be returned). If this is provided, the
+   * `cacheOptionsFor` hook is not called.
+   */
   cacheOptions?:
     | CacheOptions
     | ((
@@ -28,6 +36,12 @@ export type RequestOptions = FetcherRequestInit & {
         response: FetcherResponse,
         request: RequestOptions,
       ) => CacheOptions | undefined);
+  /**
+   * If provided, this is passed through as the third argument to `new
+   * CachePolicy()` from the `http-cache-semantics` npm package as part of the
+   * HTTP header-sensitive cache.
+   */
+  httpCacheSemanticsCachePolicyOptions?: HttpCacheSemanticsOptions;
 };
 
 export interface GetRequest extends RequestOptions {
@@ -58,6 +72,16 @@ export type AugmentedRequest = (
 };
 
 export interface CacheOptions {
+  /**
+   * This sets the TTL used in the shared cache to a value in seconds. If this
+   * is 0, the response will not be stored. If this is a positive number  and
+   * the operation returns a 2xx status code, then the response *will* be
+   * cached, regardless of HTTP headers or method: make sure this is what you
+   * intended! (There is currently no way to say "only cache responses that
+   * should be cached according to HTTP headers, but change the TTL to something
+   * specific".) Note that if this is not provided, only `GET` requests are
+   * cached.
+   */
   ttl?: number;
 }
 
@@ -341,6 +365,8 @@ export abstract class RESTDataSource {
           const response = await this.httpCache.fetch(url, outgoingRequest, {
             cacheKey,
             cacheOptions,
+            httpCacheSemanticsCachePolicyOptions:
+              outgoingRequest.httpCacheSemanticsCachePolicyOptions,
           });
 
           if (response.ok) {
