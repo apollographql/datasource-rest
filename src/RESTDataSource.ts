@@ -242,29 +242,23 @@ export abstract class RESTDataSource {
   }
 
   protected async errorFromResponse(response: FetcherResponse) {
-    const message = `${response.status}: ${response.statusText}`;
-
-    let error: GraphQLError;
-    if (response.status === 401) {
-      error = new AuthenticationError(message);
-    } else if (response.status === 403) {
-      error = new ForbiddenError(message);
-    } else {
-      error = new GraphQLError(message);
-    }
-
     const body = await this.parseBody(response);
 
-    Object.assign(error.extensions, {
-      response: {
-        url: response.url,
-        status: response.status,
-        statusText: response.statusText,
-        body,
+    return new GraphQLError(`${response.status}: ${response.statusText}`, {
+      extensions: {
+        ...(response.status === 401
+          ? { code: 'UNAUTHENTICATED' }
+          : response.status === 403
+          ? { code: 'FORBIDDEN' }
+          : {}),
+        response: {
+          url: response.url,
+          status: response.status,
+          statusText: response.statusText,
+          body,
+        },
       },
     });
-
-    return error;
   }
 
   protected async get<TResult = any>(
@@ -436,19 +430,5 @@ export abstract class RESTDataSource {
     } else {
       return fn();
     }
-  }
-}
-
-export class AuthenticationError extends GraphQLError {
-  constructor(message: string) {
-    super(message, { extensions: { code: 'UNAUTHENTICATED' } });
-    this.name = 'AuthenticationError';
-  }
-}
-
-export class ForbiddenError extends GraphQLError {
-  constructor(message: string) {
-    super(message, { extensions: { code: 'FORBIDDEN' } });
-    this.name = 'ForbiddenError';
   }
 }

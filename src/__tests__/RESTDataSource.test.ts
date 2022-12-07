@@ -1,9 +1,7 @@
 import {
   AugmentedRequest,
-  AuthenticationError,
   CacheOptions,
   DataSourceConfig,
-  ForbiddenError,
   RequestDeduplicationPolicy,
   RequestOptions,
   RESTDataSource,
@@ -803,7 +801,7 @@ describe('RESTDataSource', () => {
     });
 
     describe('error handling', () => {
-      it('throws an AuthenticationError when the response status is 401', async () => {
+      it('throws an UNAUTHENTICATED error when the response status is 401', async () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
 
@@ -815,7 +813,7 @@ describe('RESTDataSource', () => {
         nock(apiUrl).get('/foo').reply(401, 'Invalid token');
 
         const result = dataSource.getFoo();
-        await expect(result).rejects.toThrow(AuthenticationError);
+        await expect(result).rejects.toThrow(GraphQLError);
         await expect(result).rejects.toMatchObject({
           extensions: {
             code: 'UNAUTHENTICATED',
@@ -827,7 +825,7 @@ describe('RESTDataSource', () => {
         });
       });
 
-      it('throws a ForbiddenError when the response status is 403', async () => {
+      it('throws a FORBIDDEN error when the response status is 403', async () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
 
@@ -839,7 +837,7 @@ describe('RESTDataSource', () => {
         nock(apiUrl).get('/foo').reply(403, 'No access');
 
         const result = dataSource.getFoo();
-        await expect(result).rejects.toThrow(ForbiddenError);
+        await expect(result).rejects.toThrow(GraphQLError);
         await expect(result).rejects.toMatchObject({
           extensions: {
             code: 'FORBIDDEN',
