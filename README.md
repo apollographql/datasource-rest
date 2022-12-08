@@ -75,7 +75,7 @@ If a resource's path starts with something that looks like an URL because it con
 #### Methods
 
 ##### `cacheKeyFor`
-By default, `RESTDatasource` uses the full request URL as a cache key when saving information about the request to the `KeyValueCache`. Override this method to remove query parameters or compute a custom cache key.
+By default, `RESTDatasource` uses the `cacheKey` option from the request as the cache key, or the full request URL otherwise when saving information about the request to the `KeyValueCache`. Override this method to remove query parameters or compute a custom cache key.
 
 For example, you could use this to use header fields or the HTTP method as part of the cache key. Even though we do validate header fields and don't serve responses from cache when they don't match, new responses overwrite old ones with different header fields. (For the HTTP method, this might be a positive thing, as you may want a `POST /foo` request to stop a previously cached `GET /foo` from being returned.)
 
@@ -207,7 +207,7 @@ class MoviesAPI extends RESTDataSource {
 }
 ```
 
-All of the HTTP helper functions (`get`, `put`, `post`, `patch`, and `delete`) accept a second parameter for setting the `body`, `headers`, `params`, and `cacheOptions`.
+All of the HTTP helper functions (`get`, `put`, `post`, `patch`, and `delete`) accept a second parameter for setting the `body`, `headers`, `params`, `cacheKey`, and `cacheOptions`.
 
 ### Intercepting fetches
 

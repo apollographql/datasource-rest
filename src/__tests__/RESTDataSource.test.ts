@@ -755,7 +755,7 @@ describe('RESTDataSource', () => {
         await dataSource.getFoo(1);
       });
 
-      it('allows specifying a custom cache key', async () => {
+      it('allows specifying a custom cache key via cacheKeyFor', async () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
 
@@ -778,6 +778,44 @@ describe('RESTDataSource', () => {
           dataSource.getFoo(1, 'secret'),
           dataSource.getFoo(1, 'anotherSecret'),
         ]);
+      });
+
+      it('allows specifying a custom cache key via cacheKey used for deduplication', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          getFoo(id: number) {
+            return this.get(`foo/${id}`, {
+              cacheKey: 'constant',
+            });
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(200);
+
+        await Promise.all([dataSource.getFoo(1), dataSource.getFoo(1)]);
+      });
+
+      it('allows specifying a custom cache key via cacheKey used for HTTP-header-sensitive cache', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+          protected override requestDeduplicationPolicyFor() {
+            return { policy: 'do-not-deduplicate' } as const;
+          }
+
+          getFoo(id: number) {
+            return this.get(`foo/${id}`, {
+              cacheKey: 'constant',
+            });
+          }
+        })();
+
+        nock(apiUrl)
+          .get('/foo/1')
+          .reply(200, '{}', { 'cache-control': 'max-age=60' });
+
+        await dataSource.getFoo(1);
+        await dataSource.getFoo(1);
       });
 
       it('allows disabling deduplication', async () => {
