@@ -793,7 +793,7 @@ describe('RESTDataSource', () => {
 
         nock(apiUrl).get('/foo/1').reply(200);
 
-        await Promise.all([dataSource.getFoo(1), dataSource.getFoo(1)]);
+        await Promise.all([dataSource.getFoo(1), dataSource.getFoo(2)]);
       });
 
       it('allows specifying a custom cache key via cacheKey used for HTTP-header-sensitive cache', async () => {
@@ -815,7 +815,7 @@ describe('RESTDataSource', () => {
           .reply(200, '{}', { 'cache-control': 'max-age=60' });
 
         await dataSource.getFoo(1);
-        await dataSource.getFoo(1);
+        await dataSource.getFoo(2);
       });
 
       it('allows disabling deduplication', async () => {
