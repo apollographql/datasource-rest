@@ -23,6 +23,12 @@ export type RequestOptions = FetcherRequestInit & {
    */
   params?: Record<string, string | undefined> | URLSearchParams;
   /**
+   * The default implementation of `cacheKeyFor` returns this value if it is
+   * provided. This is used both as part of the request deduplication key and as
+   * the key in the shared HTTP-header-sensitive cache.
+   */
+  cacheKey?: string;
+  /**
    * This can be a `CacheOptions` object or a function returning such an object.
    * The details of what its fields mean are documented under `CacheOptions`.
    * The function is called after a real HTTP request is made (and is not called
@@ -39,7 +45,7 @@ export type RequestOptions = FetcherRequestInit & {
   /**
    * If provided, this is passed through as the third argument to `new
    * CachePolicy()` from the `http-cache-semantics` npm package as part of the
-   * HTTP header-sensitive cache.
+   * HTTP-header-sensitive cache.
    */
   httpCacheSemanticsCachePolicyOptions?: HttpCacheSemanticsOptions;
 };
@@ -130,13 +136,16 @@ export abstract class RESTDataSource {
     this.httpCache = new HTTPCache(config?.cache, config?.fetch);
   }
 
-  // By default, we use the full request URL as the cache key.
-  // You can override this to remove query parameters or compute a cache key in any way that makes sense.
-  // For example, you could use this to take Vary header fields into account.
-  // Although we do validate header fields and don't serve responses from cache when they don't match,
-  // new responses overwrite old ones with different vary header fields.
-  protected cacheKeyFor(url: URL, _request: RequestOptions): string {
-    return url.toString();
+  // By default, we use `cacheKey` from the request if provided, or the full
+  // request URL. You can override this to remove query parameters or compute a
+  // cache key in any way that makes sense. For example, you could use this to
+  // take header fields into account (the kinds of fields you expect to show up
+  // in Vary in the response). Although we do parse Vary in responses so that we
+  // won't return a cache entry whose Vary-ed header field doesn't match, new
+  // responses can overwrite old ones with different Vary-ed header fields if
+  // you don't take the header into account in the cache key.
+  protected cacheKeyFor(url: URL, request: RequestOptions): string {
+    return request.cacheKey ?? url.toString();
   }
 
   /**
