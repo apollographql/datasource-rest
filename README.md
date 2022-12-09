@@ -148,6 +148,8 @@ Allows setting the `CacheOptions` to be used for each request/response in the HT
 
 You can also specify `cacheOptions` as part of the "request" in any call to `get()`, `post()`, etc. This can either be an object such as `{ttl: 1}`, or a function returning that object. If `cacheOptions` is provided, `cacheOptionsFor` is not called (ie, `this.cacheOptionsFor` is effectively the default value of `cacheOptions`).
 
+The `cacheOptions` function and `cacheOptionsFor` method may be async.
+
 ```javascript
 override cacheOptionsFor() {
   return {

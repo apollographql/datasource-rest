@@ -17,7 +17,7 @@ describe('HTTPCache', () => {
   afterEach(nockAfterEach);
 
   beforeAll(() => {
-    // nock depends on process.nextTick
+    // nock depends on process.nextTick (and we use it to make async functions actually async)
     jest.useFakeTimers({ doNotFake: ['nextTick'] });
   });
 
@@ -207,6 +207,33 @@ describe('HTTPCache', () => {
           cacheOptions: () => ({
             ttl: 30,
           }),
+        },
+      );
+
+      jest.advanceTimersByTime(10000);
+
+      const response = await httpCache.fetch(adaUrl);
+
+      expect(await response.json()).toEqual({ name: 'Ada Lovelace' });
+      expect(response.headers.get('age')).toEqual('10');
+    });
+
+    it('allows overriding the TTL dynamically with an async function', async () => {
+      mockGetAdaLovelace({
+        'cache-control': 'private, no-cache',
+        'set-cookie': 'foo',
+      });
+      await httpCache.fetch(
+        adaUrl,
+        {},
+        {
+          cacheOptions: async () => {
+            // Make it really async (using nextTick because we're not mocking it)
+            await new Promise<void>((resolve) => process.nextTick(resolve));
+            return {
+              ttl: 30,
+            };
+          },
         },
       );
 
