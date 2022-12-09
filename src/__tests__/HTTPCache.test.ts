@@ -518,21 +518,34 @@ describe('HTTPCache', () => {
   });
 
   describe('HEAD requests', () => {
-    it('returns a cached GET response when the method is HEAD', async () => {
-      mockGetAdaLovelace();
+    it('bypasses the cache', async () => {
+      // x2
+      nock(apiUrl).head(adaPath).times(2).reply(200);
 
-      await httpCache.fetch(adaUrl, {}, { cacheOptions: { ttl: 30000 } });
-
-      const headResponse = await httpCache.fetch(adaUrl, {
+      await httpCache.fetch(adaUrl, {
         method: 'HEAD',
       });
 
-      expect(headResponse.status).toEqual(200);
-      expect(await headResponse.json()).toMatchInlineSnapshot(`
+      await httpCache.fetch(adaUrl, {
+        method: 'HEAD',
+      });
+    });
+
+    it('bypasses the cache even with explicit ttl', async () => {
+      // x2
+      nock(apiUrl).head(adaPath).times(2).reply(200);
+
+      await httpCache.fetch(
+        adaUrl,
         {
-          "name": "Ada Lovelace",
-        }
-      `);
+          method: 'HEAD',
+        },
+        { cacheOptions: { ttl: 30000 } },
+      );
+      
+      await httpCache.fetch(adaUrl, {
+        method: 'HEAD',
+      });
     });
   });
 });

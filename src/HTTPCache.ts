@@ -61,6 +61,15 @@ export class HTTPCache {
     requestOpts.method = requestOpts.method ?? 'GET';
     const cacheKey = cache?.cacheKey ?? urlString;
 
+    // Bypass the cache altogether for HEAD requests. Caching them might be fine
+    // to do, but for now this is just a pragmatic choice for timeliness without
+    // fully understanding the interplay between GET and HEAD requests (i.e.
+    // refreshing headers with HEAD requests, responding to HEADs with cached
+    // and valid GETs, etc.)
+    if (requestOpts.method === 'HEAD') {
+      return await this.httpFetch(urlString, requestOpts);
+    }
+
     const entry = await this.keyValueCache.get(cacheKey);
     if (!entry) {
       // There's nothing in our cache. Fetch the URL and save it to the cache if
@@ -178,16 +187,10 @@ export class HTTPCache {
     let ttlOverride = cacheOptions?.ttl;
 
     if (
-      // Don't cache responses from HEAD requests. This could be fine to do, but
-      // for now this is just a pragmatic choice for timeliness without fully
-      // understanding the interplay between GET and HEAD requests (i.e.
-      // refreshing headers with HEAD requests, responding to HEADs with cached
-      // and valid GETs, etc.)
-      request.method === 'HEAD' ||
       // With a TTL override, only cache successful responses but otherwise ignore method and response headers
-      (!(ttlOverride && policy._status >= 200 && policy._status <= 299) &&
-        // Without an override, we only cache GET requests and respect standard HTTP cache semantics
-        !(request.method === 'GET' && policy.storable()))
+      !(ttlOverride && policy._status >= 200 && policy._status <= 299) &&
+      // Without an override, we only cache GET requests and respect standard HTTP cache semantics
+      !(request.method === 'GET' && policy.storable())
     ) {
       return response;
     }
