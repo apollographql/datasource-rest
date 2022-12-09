@@ -1060,7 +1060,7 @@ describe('RESTDataSource', () => {
           }
 
           // Set a short TTL for every request
-          override cacheOptionsFor(): CacheOptions | undefined {
+          override async cacheOptionsFor(): Promise<CacheOptions | undefined> {
             return {
               ttl: 1,
             };

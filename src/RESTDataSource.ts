@@ -10,7 +10,7 @@ import isPlainObject from 'lodash.isplainobject';
 import { HTTPCache } from './HTTPCache';
 import type { Options as HttpCacheSemanticsOptions } from 'http-cache-semantics';
 
-type ValueOrPromise<T> = T | Promise<T>;
+export type ValueOrPromise<T> = T | Promise<T>;
 
 export type RequestOptions = FetcherRequestInit & {
   /**
@@ -29,11 +29,11 @@ export type RequestOptions = FetcherRequestInit & {
    */
   cacheKey?: string;
   /**
-   * This can be a `CacheOptions` object or a function returning such an object.
-   * The details of what its fields mean are documented under `CacheOptions`.
-   * The function is called after a real HTTP request is made (and is not called
-   * if a response from the cache can be returned). If this is provided, the
-   * `cacheOptionsFor` hook is not called.
+   * This can be a `CacheOptions` object or a (possibly async) function
+   * returning such an object. The details of what its fields mean are
+   * documented under `CacheOptions`. The function is called after a real HTTP
+   * request is made (and is not called if a response from the cache can be
+   * returned). If this is provided, the `cacheOptionsFor` hook is not called.
    */
   cacheOptions?:
     | CacheOptions
@@ -41,7 +41,7 @@ export type RequestOptions = FetcherRequestInit & {
         url: string,
         response: FetcherResponse,
         request: RequestOptions,
-      ) => CacheOptions | undefined);
+      ) => Promise<CacheOptions | undefined>);
   /**
    * If provided, this is passed through as the third argument to `new
    * CachePolicy()` from the `http-cache-semantics` npm package as part of the
@@ -207,7 +207,7 @@ export abstract class RESTDataSource {
     url: string,
     response: FetcherResponse,
     request: FetcherRequestInit,
-  ): CacheOptions | undefined;
+  ): ValueOrPromise<CacheOptions | undefined>;
 
   protected didEncounterError(error: Error, _request: RequestOptions) {
     throw error;

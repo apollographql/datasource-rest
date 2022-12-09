@@ -11,7 +11,11 @@ import {
   KeyValueCache,
   PrefixingKeyValueCache,
 } from '@apollo/utils.keyvaluecache';
-import type { CacheOptions, RequestOptions } from './RESTDataSource';
+import type {
+  CacheOptions,
+  RequestOptions,
+  ValueOrPromise,
+} from './RESTDataSource';
 
 // We want to use a couple internal properties of CachePolicy. (We could get
 // `_url` and `_status` off of the serialized CachePolicyObject, but `age()` is
@@ -49,7 +53,7 @@ export class HTTPCache {
             url: string,
             response: FetcherResponse,
             request: RequestOptions,
-          ) => CacheOptions | undefined);
+          ) => ValueOrPromise<CacheOptions | undefined>);
       httpCacheSemanticsCachePolicyOptions?: HttpCacheSemanticsOptions;
     },
   ): Promise<FetcherResponse> {
@@ -165,10 +169,10 @@ export class HTTPCache {
           url: string,
           response: FetcherResponse,
           request: RequestOptions,
-        ) => CacheOptions | undefined),
+        ) => ValueOrPromise<CacheOptions | undefined>),
   ): Promise<FetcherResponse> {
     if (typeof cacheOptions === 'function') {
-      cacheOptions = cacheOptions(url, response, request);
+      cacheOptions = await cacheOptions(url, response, request);
     }
 
     let ttlOverride = cacheOptions?.ttl;
