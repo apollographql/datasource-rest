@@ -839,6 +839,35 @@ describe('RESTDataSource', () => {
     });
 
     describe('error handling', () => {
+      it('can throw on 200 with throwIfResponseIsError', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          getFoo() {
+            return this.get('foo');
+          }
+
+          protected override async throwIfResponseIsError(
+            options: Parameters<RESTDataSource['throwIfResponseIsError']>[0],
+          ): Promise<void> {
+            throw await this.errorFromResponse(options);
+          }
+        })();
+
+        nock(apiUrl).get('/foo').reply(200, 'Invalid token');
+
+        const result = dataSource.getFoo();
+        await expect(result).rejects.toThrow(GraphQLError);
+        await expect(result).rejects.toMatchObject({
+          extensions: {
+            response: {
+              status: 200,
+              body: 'Invalid token',
+            },
+          },
+        });
+      });
+
       it('throws an UNAUTHENTICATED error when the response status is 401', async () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';

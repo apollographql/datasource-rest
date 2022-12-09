@@ -250,9 +250,27 @@ export abstract class RESTDataSource {
     );
   }
 
-  protected async errorFromResponse(response: FetcherResponse) {
-    const body = await this.parseBody(response);
+  protected async throwIfResponseIsError(options: {
+    url: URL;
+    request: RequestOptions;
+    response: FetcherResponse;
+    parsedBody: unknown;
+  }) {
+    if (options.response.ok) {
+      return;
+    }
+    throw await this.errorFromResponse(options);
+  }
 
+  protected async errorFromResponse({
+    response,
+    parsedBody,
+  }: {
+    url: URL;
+    request: RequestOptions;
+    response: FetcherResponse;
+    parsedBody: unknown;
+  }) {
     return new GraphQLError(`${response.status}: ${response.statusText}`, {
       extensions: {
         ...(response.status === 401
@@ -264,7 +282,7 @@ export abstract class RESTDataSource {
           url: response.url,
           status: response.status,
           statusText: response.statusText,
-          body,
+          body: parsedBody,
         },
       },
     });
@@ -372,11 +390,16 @@ export abstract class RESTDataSource {
               outgoingRequest.httpCacheSemanticsCachePolicyOptions,
           });
 
-          if (response.ok) {
-            return (await this.parseBody(response)) as TResult;
-          } else {
-            throw await this.errorFromResponse(response);
-          }
+          const parsedBody = await this.parseBody(response);
+
+          await this.throwIfResponseIsError({
+            url,
+            request: outgoingRequest,
+            response,
+            parsedBody,
+          });
+
+          return parsedBody as TResult;
         } catch (error) {
           this.didEncounterError(error as Error, outgoingRequest);
           throw error;
