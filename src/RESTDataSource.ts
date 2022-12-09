@@ -173,15 +173,16 @@ export abstract class RESTDataSource {
    */
   protected requestDeduplicationPolicyFor(
     url: URL,
-    request: WithRequired<RequestOptions, 'method'>,
+    request: RequestOptions,
   ): RequestDeduplicationPolicy {
+    const method = request.method ?? 'GET';
     // Start with the cache key that is used for the shared header-sensitive
     // cache. Note that its default implementation does not include the HTTP
     // method, so if a subclass overrides this and allows non-GET/HEADs to be
     // de-duplicated it will be important for it to include (at least!) the
     // method in the deduplication key, so we're explicitly adding GET/HEAD here.
     const cacheKey = this.cacheKeyFor(url, request);
-    if (['GET', 'HEAD'].includes(request.method)) {
+    if (['GET', 'HEAD'].includes(method)) {
       return {
         policy: 'deduplicate-during-request-lifetime',
         deduplicationKey: cacheKey,
