@@ -152,7 +152,7 @@ export abstract class RESTDataSource {
   // responses can overwrite old ones with different Vary-ed header fields if
   // you don't take the header into account in the cache key.
   protected cacheKeyFor(url: URL, request: RequestOptions): string {
-    return request.cacheKey ?? url.toString();
+    return request.cacheKey ?? `${request.method ?? 'GET'} ${url}`;
   }
 
   /**
@@ -184,7 +184,7 @@ export abstract class RESTDataSource {
     if (['GET', 'HEAD'].includes(request.method)) {
       return {
         policy: 'deduplicate-during-request-lifetime',
-        deduplicationKey: `${request.method} ${cacheKey}`,
+        deduplicationKey: cacheKey,
       };
     } else {
       return {
@@ -193,7 +193,10 @@ export abstract class RESTDataSource {
         // the same cache key (ie, URL), as per standard HTTP semantics. (We
         // don't have to invalidate the key with this HTTP method because we
         // never write it.)
-        invalidateDeduplicationKeys: [`GET ${cacheKey}`, `HEAD ${cacheKey}`],
+        invalidateDeduplicationKeys: [
+          this.cacheKeyFor(url, { ...request, method: 'GET' }),
+          this.cacheKeyFor(url, { ...request, method: 'HEAD' }),
+        ],
       };
     }
   }
@@ -306,10 +309,12 @@ export abstract class RESTDataSource {
     path: string,
     request?: GetRequest,
   ): Promise<TResult> {
-    return (await this.fetch<TResult>(path, {
-      method: 'GET',
-      ...request,
-    })).parsedBody;
+    return (
+      await this.fetch<TResult>(path, {
+        method: 'GET',
+        ...request,
+      })
+    ).parsedBody;
   }
 
   protected async post<TResult = any>(

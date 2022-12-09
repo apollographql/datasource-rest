@@ -1175,37 +1175,39 @@ describe('RESTDataSource', () => {
       });
 
       describe('HEAD requests', () => {
-        it('Uses cached GET results when TTL override is provided', async () => {
+        it('Deduplicates HEAD requests', async () => {
           const dataSource = new (class extends RESTDataSource {
             override baseURL = apiUrl;
-
-            getFoo(id: number) {
-              return this.get(`foo/${id}`, {
-                cacheOptions: { ttl: 3000 },
-              });
-            }
 
             headFoo(id: number) {
               return this.head(`foo/${id}`);
             }
           })();
 
-          nock(apiUrl).get('/foo/1').reply(200);
+          nock(apiUrl).head('/foo/1').reply(200);
 
-          await dataSource.getFoo(1);
+          await Promise.all([dataSource.headFoo(1), dataSource.headFoo(1)]);
+        });
+
+        it('Does not cache HEAD results', async () => {
+          const dataSource = new (class extends RESTDataSource {
+            override baseURL = apiUrl;
+
+            headFoo(id: number) {
+              return this.head(`foo/${id}`);
+            }
+          })();
+
+          nock(apiUrl).head('/foo/1').reply(200);
+          nock(apiUrl).head('/foo/1').reply(200);
+
           await dataSource.headFoo(1);
-          await dataSource.getFoo(1);
+          await dataSource.headFoo(1);
         });
 
         it('Does not cache HEAD results even when TTL override is provided', async () => {
           const dataSource = new (class extends RESTDataSource {
             override baseURL = apiUrl;
-
-            getFoo(id: number) {
-              return this.get(`foo/${id}`, {
-                cacheOptions: { ttl: 3000 },
-              });
-            }
 
             headFoo(id: number) {
               return this.head(`foo/${id}`, {
@@ -1215,10 +1217,10 @@ describe('RESTDataSource', () => {
           })();
 
           nock(apiUrl).head('/foo/1').reply(200);
-          nock(apiUrl).get('/foo/1').reply(200, { foo: 'bar' });
+          nock(apiUrl).head('/foo/1').reply(200);
 
           await dataSource.headFoo(1);
-          await dataSource.getFoo(1);
+          await dataSource.headFoo(1);
         });
       });
 
