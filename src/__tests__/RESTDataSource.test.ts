@@ -432,6 +432,10 @@ describe('RESTDataSource', () => {
         deleteFoo() {
           return this.delete('foo');
         }
+
+        headFoo() {
+          return this.head('foo');
+        }
       })();
 
       const expectedFoo = { foo: 'bar' };
@@ -474,6 +478,64 @@ describe('RESTDataSource', () => {
         const data = await dataSource.deleteFoo();
 
         expect(data).toEqual(expectedFoo);
+      });
+
+      it('HEAD', async () => {
+        nock(apiUrl).head('/foo').reply(200);
+
+        const response = await dataSource.headFoo();
+
+        expect(response.status).toEqual(200);
+      });
+    });
+
+    describe('HEAD requests', () => {
+      it('Deduplicates HEAD requests', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = apiUrl;
+
+          headFoo(id: number) {
+            return this.head(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).head('/foo/1').reply(200);
+
+        await Promise.all([dataSource.headFoo(1), dataSource.headFoo(1)]);
+      });
+
+      it('Does not cache HEAD results', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = apiUrl;
+
+          headFoo(id: number) {
+            return this.head(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).head('/foo/1').reply(200);
+        nock(apiUrl).head('/foo/1').reply(200);
+
+        await dataSource.headFoo(1);
+        await dataSource.headFoo(1);
+      });
+
+      it('Does not cache HEAD results even when TTL override is provided', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = apiUrl;
+
+          headFoo(id: number) {
+            return this.head(`foo/${id}`, {
+              cacheOptions: { ttl: 3000 },
+            });
+          }
+        })();
+
+        nock(apiUrl).head('/foo/1').reply(200);
+        nock(apiUrl).head('/foo/1').reply(200);
+
+        await dataSource.headFoo(1);
+        await dataSource.headFoo(1);
       });
     });
 
@@ -1172,56 +1234,6 @@ describe('RESTDataSource', () => {
         // Call a second time which should be not be cached because of
         // `set-cookie` with `shared: true`. (Note the `.times(2)` above.)
         await dataSource.getFoo(2, true);
-      });
-
-      describe('HEAD requests', () => {
-        it('Deduplicates HEAD requests', async () => {
-          const dataSource = new (class extends RESTDataSource {
-            override baseURL = apiUrl;
-
-            headFoo(id: number) {
-              return this.head(`foo/${id}`);
-            }
-          })();
-
-          nock(apiUrl).head('/foo/1').reply(200);
-
-          await Promise.all([dataSource.headFoo(1), dataSource.headFoo(1)]);
-        });
-
-        it('Does not cache HEAD results', async () => {
-          const dataSource = new (class extends RESTDataSource {
-            override baseURL = apiUrl;
-
-            headFoo(id: number) {
-              return this.head(`foo/${id}`);
-            }
-          })();
-
-          nock(apiUrl).head('/foo/1').reply(200);
-          nock(apiUrl).head('/foo/1').reply(200);
-
-          await dataSource.headFoo(1);
-          await dataSource.headFoo(1);
-        });
-
-        it('Does not cache HEAD results even when TTL override is provided', async () => {
-          const dataSource = new (class extends RESTDataSource {
-            override baseURL = apiUrl;
-
-            headFoo(id: number) {
-              return this.head(`foo/${id}`, {
-                cacheOptions: { ttl: 3000 },
-              });
-            }
-          })();
-
-          nock(apiUrl).head('/foo/1').reply(200);
-          nock(apiUrl).head('/foo/1').reply(200);
-
-          await dataSource.headFoo(1);
-          await dataSource.headFoo(1);
-        });
       });
 
       describe('user hooks', () => {
