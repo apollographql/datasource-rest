@@ -178,7 +178,11 @@ export class HTTPCache {
     let ttlOverride = cacheOptions?.ttl;
 
     if (
-      // Don't cache responses from HEAD requests
+      // Don't cache responses from HEAD requests. This could be fine to do, but
+      // for now this is just a pragmatic choice for timeliness without fully
+      // understanding the interplay between GET and HEAD requests (i.e.
+      // refreshing headers with HEAD requests, responding to HEADs with cached
+      // and valid GETs, etc.)
       request.method === 'HEAD' ||
       // With a TTL override, only cache successful responses but otherwise ignore method and response headers
       (!(ttlOverride && policy._status >= 200 && policy._status <= 299) &&
