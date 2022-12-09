@@ -451,7 +451,7 @@ export abstract class RESTDataSource {
           return {
             parsedBody: parsedBody as any as TResult,
             response,
-          }
+          };
         } catch (error) {
           this.didEncounterError(error as Error, outgoingRequest);
           throw error;
