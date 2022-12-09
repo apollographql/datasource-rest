@@ -542,7 +542,7 @@ describe('HTTPCache', () => {
         },
         { cacheOptions: { ttl: 30000 } },
       );
-      
+
       await httpCache.fetch(adaUrl, {
         method: 'HEAD',
       });
