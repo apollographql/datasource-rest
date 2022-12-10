@@ -51,7 +51,7 @@
   },
   "dependencies": {
     "@apollo/utils.fetcher": "^2.0.0",
-    "@apollo/utils.keyvaluecache": "^1.0.2",
+    "@apollo/utils.keyvaluecache": "^2.0.0",
     "@types/http-cache-semantics": "^4.0.1",
     "http-cache-semantics": "^4.1.0",
     "lodash.isplainobject": "^4.0.6",
