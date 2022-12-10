@@ -760,7 +760,7 @@ describe('RESTDataSource', () => {
           override baseURL = 'https://api.example.com';
 
           override cacheKeyFor(url: URL, _request: RequestOptions) {
-            const urlNoSearchParams = new URL(url);
+            const urlNoSearchParams = new URL(url.toString());
             urlNoSearchParams.search = '';
             return urlNoSearchParams.toString();
           }
