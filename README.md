@@ -6,7 +6,7 @@ RESTDataSource provides two levels of caching: an in-memory "request deduplicati
 
 ## Documentation
 
-View the [Apollo Server documentation for data sources](https://www.apollographql.com/docs/apollo-server/features/data-sources/) for more details.
+View the [Apollo Server documentation for RESTDataSource](https://www.apollographql.com/docs/apollo-server/data/fetching-rest) for more details.
 
 ## Usage
 
