@@ -2,7 +2,7 @@
 
 This package exports a ([`RESTDataSource`](https://github.com/apollographql/datasource-rest#apollo-rest-data-source)) class which is used for fetching data from a REST API and exposing it via GraphQL within Apollo Server.
 
-RESTDataSource provides two levels of caching: an in-memory "request deduplication" feature primarily used to avoid sending the same GET request multiple times in parallel, and an "HTTP cache" which provides browser-style caching in a (potentially shared) `KeyValueCache` which observes standard HTTP caching headers.
+RESTDataSource provides two levels of caching: an in-memory "request deduplication" feature primarily used to avoid sending the same GET (or HEAD) request multiple times in parallel, and an "HTTP cache" which provides browser-style caching in a (potentially shared) `KeyValueCache` which observes standard HTTP caching headers.
 
 ## Documentation
 
@@ -75,15 +75,15 @@ If a resource's path starts with something that looks like an URL because it con
 #### Methods
 
 ##### `cacheKeyFor`
-By default, `RESTDatasource` uses the `cacheKey` option from the request as the cache key, or the full request URL otherwise when saving information about the request to the `KeyValueCache`. Override this method to remove query parameters or compute a custom cache key.
+By default, `RESTDatasource` uses the `cacheKey` option from the request as the cache key, or the request method and full request URL otherwise when saving information about the request to the `KeyValueCache`. Override this method to remove query parameters or compute a custom cache key.
 
 For example, you could use this to use header fields or the HTTP method as part of the cache key. Even though we do validate header fields and don't serve responses from cache when they don't match, new responses overwrite old ones with different header fields. (For the HTTP method, this might be a positive thing, as you may want a `POST /foo` request to stop a previously cached `GET /foo` from being returned.)
 
 ##### `requestDeduplicationPolicyFor`
 
-By default, `RESTDataSource` de-duplicates all **concurrent** outgoing **GET requests** in an in-memory cache, separate from the `KeyValueCache` used for the HTTP response cache. It makes the assumption that two HTTP GET requests to the same URL made in parallel can share the same response. When the GET request returns, its response is delivered to each caller that requested the same URL concurrently, and then it is removed from the cache.
+By default, `RESTDataSource` de-duplicates all **concurrent** outgoing **`GET` (or `HEAD`) requests** in an in-memory cache, separate from the `KeyValueCache` used for the HTTP response cache. It makes the assumption that two `GET` (or two `HEAD`) requests to the same URL made in parallel can share the same response. When the request returns, its response is delivered to each caller that requested the same URL concurrently, and then it is removed from the cache.
 
-If a request is made with the same cache key (URL by default) but with an HTTP method other than GET, deduplication of the in-flight request is invalidated: the next parallel `GET` request for the same URL will make a new request.
+If a request is made with the same cache key (method + URL by default) but with an HTTP method other than `GET` or `HEAD`, deduplication of the in-flight request is invalidated: the next parallel `GET` (or `HEAD`) request for the same URL will make a new request.
 
 You can configure this behavior in several ways:
 - You can change which requests are de-deduplicated and which are not.
@@ -92,9 +92,9 @@ You can configure this behavior in several ways:
 
 You do this by overriding the `requestDeduplicationPolicyFor` method in your class. This method takes an URL and a request, and returns a policy object with one of three forms:
 
-- `{policy: 'deduplicate-during-request-lifetime', deduplicationKey: string}`: This is the default behavior for GET requests. If a request with the same deduplication key is in progress, share its result. Otherwise, start a request, allow other requests to de-duplicate against it while it is running, and forget about it once the request returns successfully.
-- `{policy: 'deduplicate-until-invalidated', deduplicationKey: string}`: This was the default behavior for GET requests in versions prior to v5. If a request with the same deduplication key is in progress, share its result. Otherwise, start a request and allow other requests to de-duplicate against it while it is running. All future requests with policy `deduplicate-during-request-lifetime` or `deduplicate-until-invalidated` with the same `deduplicationKey` will share the same result until a request is started with policy `do-not-deduplicate` and a matching entry in `invalidateDeduplicationKeys`.
-- `{ policy: 'do-not-deduplicate'; invalidateDeduplicationKeys?: string[] }`: This is the default behavior for non-GET requests. Always run an actual HTTP request and don't allow other requests to de-duplicate against it. Additionally, invalidate any listed keys immediately: new requests with that `deduplicationKey` will not match any requests that currently exist in the request cache.
+- `{policy: 'deduplicate-during-request-lifetime', deduplicationKey: string}`: This is the default behavior for `GET` requests. If a request with the same deduplication key is in progress, share its result. Otherwise, start a request, allow other requests to de-duplicate against it while it is running, and forget about it once the request returns successfully.
+- `{policy: 'deduplicate-until-invalidated', deduplicationKey: string}`: This was the default behavior for `GET` requests in versions prior to v5. If a request with the same deduplication key is in progress, share its result. Otherwise, start a request and allow other requests to de-duplicate against it while it is running. All future requests with policy `deduplicate-during-request-lifetime` or `deduplicate-until-invalidated` with the same `deduplicationKey` will share the same result until a request is started with policy `do-not-deduplicate` and a matching entry in `invalidateDeduplicationKeys`.
+- `{ policy: 'do-not-deduplicate'; invalidateDeduplicationKeys?: string[] }`: This is the default behavior for non-`GET` requests. Always run an actual HTTP request and don't allow other requests to de-duplicate against it. Additionally, invalidate any listed keys immediately: new requests with that `deduplicationKey` will not match any requests that currently exist in the request cache.
 
 The default implementation of this method is:
 
@@ -103,25 +103,29 @@ protected requestDeduplicationPolicyFor(
   url: URL,
   request: RequestOptions,
 ): RequestDeduplicationPolicy {
+  const method = request.method ?? 'GET';
   // Start with the cache key that is used for the shared header-sensitive
   // cache. Note that its default implementation does not include the HTTP
-  // method, so if a subclass overrides this and allows non-GETs to be
+  // method, so if a subclass overrides this and allows non-GET/HEADs to be
   // de-duplicated it will be important for it to include (at least!) the
-  // method in the deduplication key, so we're explicitly adding GET here.
+  // method in the deduplication key, so we're explicitly adding GET/HEAD here.
   const cacheKey = this.cacheKeyFor(url, request);
-  if (request.method === 'GET') {
+  if (['GET', 'HEAD'].includes(method)) {
     return {
       policy: 'deduplicate-during-request-lifetime',
-      deduplicationKey: `${request.method} ${cacheKey}`,
+      deduplicationKey: `${method} ${cacheKey}`,
     };
   } else {
     return {
       policy: 'do-not-deduplicate',
-      // Always invalidate GETs when a different method is seen on the same
+      // Always invalidate GETs and HEADs when a different method is seen on the same
       // cache key (ie, URL), as per standard HTTP semantics. (We don't have
       // to invalidate the key with this HTTP method because we never write
       // it.)
-      invalidateDeduplicationKeys: [`GET ${cacheKey}`],
+      invalidateDeduplicationKeys: [
+        this.cacheKeyFor(url, { ...request, method: 'GET' }),
+        this.cacheKeyFor(url, { ...request, method: 'HEAD' }),
+      ],
     };
   }
 ```
@@ -144,9 +148,9 @@ will wait until the promise is completed to continue executing the request. See
 the [intercepting fetches](#intercepting-fetches) section for usage examples.
 
 ##### `cacheOptionsFor`
-Allows setting the `CacheOptions` to be used for each request/response in the HTTPCache. This is separate from the request-only cache. You can use this to set the TTL to a value in seconds. If you return `{ttl: 0}`, the response will not be stored. If you return a positive number for `ttl` and the operation returns a 2xx status code, then the response *will* be cached, regardless of HTTP headers or method: make sure this is what you intended! (There is currently no way to say "only cache responses that should be cached according to HTTP headers, but change the TTL to something specific".) Note that if you do not specify `ttl` here, only `GET` requests are cached.
+Allows setting the `CacheOptions` to be used for each request/response in the `HTTPCache`. This is separate from the request-only cache. You can use this to set the TTL to a value in seconds. If you return `{ttl: 0}`, the response will not be stored. If you return a positive number for `ttl` and the operation returns a 2xx status code, then the response *will* be cached, regardless of HTTP headers: make sure this is what you intended! (There is currently no way to say "only cache responses that should be cached according to HTTP headers, but change the TTL to something specific".) Note that if you do not specify `ttl` here, only `GET` requests are cached.
 
-You can also specify `cacheOptions` as part of the "request" in any call to `get()`, `post()`, etc. This can either be an object such as `{ttl: 1}`, or a function returning that object. If `cacheOptions` is provided, `cacheOptionsFor` is not called (ie, `this.cacheOptionsFor` is effectively the default value of `cacheOptions`).
+You can also specify `cacheOptions` as part of the "request" in any call to `get()`, `post()`, etc. Note that specifically `head()` calls are not cached at all, so this will have no effect for `HEAD` requests. This can either be an object such as `{ttl: 1}`, or a function returning that object. If `cacheOptions` is provided, `cacheOptionsFor` is not called (ie, `this.cacheOptionsFor` is effectively the default value of `cacheOptions`).
 
 The `cacheOptions` function and `cacheOptionsFor` method may be async.
 
@@ -170,7 +174,7 @@ You can override this method in order to serialize other objects such as custom 
 
 ### HTTP Methods
 
-The `get` method on the [`RESTDataSource`](https://github.com/apollographql/datasource-rest/tree/main/src/RESTDataSource.ts) makes an HTTP `GET` request. Similarly, there are methods built-in to allow for `POST`, `PUT`, `PATCH`, and `DELETE` requests.
+The `get` method on the [`RESTDataSource`](https://github.com/apollographql/datasource-rest/tree/main/src/RESTDataSource.ts) makes an HTTP `GET` request. Similarly, there are methods built-in to allow for `POST`, `PUT`, `PATCH`, `DELETE`, and `HEAD` requests.
 
 ```javascript
 class MoviesAPI extends RESTDataSource {
@@ -209,7 +213,7 @@ class MoviesAPI extends RESTDataSource {
 }
 ```
 
-All of the HTTP helper functions (`get`, `put`, `post`, `patch`, and `delete`) accept a second parameter for setting the `body`, `headers`, `params`, `cacheKey`, and `cacheOptions`.
+All of the HTTP helper functions (`get`, `put`, `post`, `patch`, `delete`, and `head`) accept a second parameter for setting the `body`, `headers`, `params`, `cacheKey`, and `cacheOptions`.
 
 ### Intercepting fetches
 

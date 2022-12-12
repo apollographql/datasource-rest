@@ -50,20 +50,27 @@ export type RequestOptions = FetcherRequestInit & {
   httpCacheSemanticsCachePolicyOptions?: HttpCacheSemanticsOptions;
 };
 
+export interface HeadRequest extends RequestOptions {
+  method?: 'HEAD';
+  body?: never;
+}
+
 export interface GetRequest extends RequestOptions {
   method?: 'GET';
   body?: never;
 }
+
+export type RequestWithoutBody = HeadRequest | GetRequest;
 
 export interface RequestWithBody extends Omit<RequestOptions, 'body'> {
   method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: FetcherRequestInit['body'] | object;
 }
 
-type DataSourceRequest = GetRequest | RequestWithBody;
+type DataSourceRequest = RequestWithoutBody | RequestWithBody;
 
 // While tempting, this union can't be reduced / factored out to just
-// Omit<WithRequired<GetRequest | RequestWithBody, 'headers'>, 'params'> & { params: URLSearchParams }
+// Omit<WithRequired<RequestWithBody | RequestWithBody, 'headers'>, 'params'> & { params: URLSearchParams }
 // TS loses its ability to discriminate against the method (and its consequential `body` type)
 /**
  * This type is for convenience w.r.t. the `willSendRequest` and `resolveURL`
@@ -71,7 +78,7 @@ type DataSourceRequest = GetRequest | RequestWithBody;
  * empty.
  */
 export type AugmentedRequest = (
-  | Omit<WithRequired<GetRequest, 'headers'>, 'params'>
+  | Omit<WithRequired<RequestWithoutBody, 'headers'>, 'params'>
   | Omit<WithRequired<RequestWithBody, 'headers'>, 'params'>
 ) & {
   params: URLSearchParams;
@@ -145,7 +152,7 @@ export abstract class RESTDataSource {
   // responses can overwrite old ones with different Vary-ed header fields if
   // you don't take the header into account in the cache key.
   protected cacheKeyFor(url: URL, request: RequestOptions): string {
-    return request.cacheKey ?? url.toString();
+    return request.cacheKey ?? `${request.method ?? 'GET'} ${url}`;
   }
 
   /**
@@ -168,25 +175,29 @@ export abstract class RESTDataSource {
     url: URL,
     request: RequestOptions,
   ): RequestDeduplicationPolicy {
+    const method = request.method ?? 'GET';
     // Start with the cache key that is used for the shared header-sensitive
     // cache. Note that its default implementation does not include the HTTP
-    // method, so if a subclass overrides this and allows non-GETs to be
+    // method, so if a subclass overrides this and allows non-GET/HEADs to be
     // de-duplicated it will be important for it to include (at least!) the
-    // method in the deduplication key, so we're explicitly adding GET here.
+    // method in the deduplication key, so we're explicitly adding GET/HEAD here.
     const cacheKey = this.cacheKeyFor(url, request);
-    if (request.method === 'GET') {
+    if (['GET', 'HEAD'].includes(method)) {
       return {
         policy: 'deduplicate-during-request-lifetime',
-        deduplicationKey: `${request.method} ${cacheKey}`,
+        deduplicationKey: cacheKey,
       };
     } else {
       return {
         policy: 'do-not-deduplicate',
-        // Always invalidate GETs when a different method is seen on the same
-        // cache key (ie, URL), as per standard HTTP semantics. (We don't have
-        // to invalidate the key with this HTTP method because we never write
-        // it.)
-        invalidateDeduplicationKeys: [`GET ${cacheKey}`],
+        // Always invalidate GETs and HEADs when a different method is seen on
+        // the same cache key (ie, URL), as per standard HTTP semantics. (We
+        // don't have to invalidate the key with this HTTP method because we
+        // never write it.)
+        invalidateDeduplicationKeys: [
+          this.cacheKeyFor(url, { ...request, method: 'GET' }),
+          this.cacheKeyFor(url, { ...request, method: 'HEAD' }),
+        ],
       };
     }
   }
@@ -288,39 +299,71 @@ export abstract class RESTDataSource {
     });
   }
 
+  protected async head(
+    path: string,
+    request?: HeadRequest,
+  ): Promise<FetcherResponse> {
+    return (await this.fetch(path, { method: 'HEAD', ...request })).response;
+  }
+
   protected async get<TResult = any>(
     path: string,
     request?: GetRequest,
   ): Promise<TResult> {
-    return this.fetch<TResult>(path, { method: 'GET', ...request });
+    return (
+      await this.fetch<TResult>(path, {
+        method: 'GET',
+        ...request,
+      })
+    ).parsedBody;
   }
 
   protected async post<TResult = any>(
     path: string,
     request?: RequestWithBody,
   ): Promise<TResult> {
-    return this.fetch<TResult>(path, { method: 'POST', ...request });
+    return (
+      await this.fetch<TResult>(path, {
+        method: 'POST',
+        ...request,
+      })
+    ).parsedBody;
   }
 
   protected async patch<TResult = any>(
     path: string,
     request?: RequestWithBody,
   ): Promise<TResult> {
-    return this.fetch<TResult>(path, { method: 'PATCH', ...request });
+    return (
+      await this.fetch<TResult>(path, {
+        method: 'PATCH',
+        ...request,
+      })
+    ).parsedBody;
   }
 
   protected async put<TResult = any>(
     path: string,
     request?: RequestWithBody,
   ): Promise<TResult> {
-    return this.fetch<TResult>(path, { method: 'PUT', ...request });
+    return (
+      await this.fetch<TResult>(path, {
+        method: 'PUT',
+        ...request,
+      })
+    ).parsedBody;
   }
 
   protected async delete<TResult = any>(
     path: string,
     request?: RequestWithBody,
   ): Promise<TResult> {
-    return this.fetch<TResult>(path, { method: 'DELETE', ...request });
+    return (
+      await this.fetch<TResult>(path, {
+        method: 'DELETE',
+        ...request,
+      })
+    ).parsedBody;
   }
 
   private urlSearchParamsFromRecord(
@@ -337,10 +380,10 @@ export abstract class RESTDataSource {
     return usp;
   }
 
-  private async fetch<TResult>(
+  public async fetch<TResult>(
     path: string,
     incomingRequest: DataSourceRequest,
-  ): Promise<TResult> {
+  ): Promise<{ parsedBody: TResult; response: FetcherResponse }> {
     const augmentedRequest: AugmentedRequest = {
       ...incomingRequest,
       // guarantee params and headers objects before calling `willSendRequest` for convenience
@@ -350,6 +393,9 @@ export abstract class RESTDataSource {
           : this.urlSearchParamsFromRecord(incomingRequest.params),
       headers: incomingRequest.headers ?? Object.create(null),
     };
+    // Default to GET in the case that `fetch` is called directly with no method
+    // provided. Our other request methods all provide one.
+    if (!augmentedRequest.method) augmentedRequest.method = 'GET';
 
     if (this.willSendRequest) {
       await this.willSendRequest(path, augmentedRequest);
@@ -374,7 +420,10 @@ export abstract class RESTDataSource {
 
     // At this point we know the `body` is a `string`, `Buffer`, or `undefined`
     // (not possibly an `object`).
-    const outgoingRequest = augmentedRequest as RequestOptions;
+    const outgoingRequest = augmentedRequest as WithRequired<
+      RequestOptions,
+      'method'
+    >;
 
     const performRequest = async () => {
       return this.trace(url, outgoingRequest, async () => {
@@ -399,7 +448,10 @@ export abstract class RESTDataSource {
             parsedBody,
           });
 
-          return parsedBody as TResult;
+          return {
+            parsedBody: parsedBody as any as TResult,
+            response,
+          };
         } catch (error) {
           this.didEncounterError(error as Error, outgoingRequest);
           throw error;

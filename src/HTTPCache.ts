@@ -61,6 +61,15 @@ export class HTTPCache {
     requestOpts.method = requestOpts.method ?? 'GET';
     const cacheKey = cache?.cacheKey ?? urlString;
 
+    // Bypass the cache altogether for HEAD requests. Caching them might be fine
+    // to do, but for now this is just a pragmatic choice for timeliness without
+    // fully understanding the interplay between GET and HEAD requests (i.e.
+    // refreshing headers with HEAD requests, responding to HEADs with cached
+    // and valid GETs, etc.)
+    if (requestOpts.method === 'HEAD') {
+      return await this.httpFetch(urlString, requestOpts);
+    }
+
     const entry = await this.keyValueCache.get(cacheKey);
     if (!entry) {
       // There's nothing in our cache. Fetch the URL and save it to the cache if
