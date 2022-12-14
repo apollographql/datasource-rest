@@ -104,9 +104,15 @@ export interface DataSourceConfig {
   cache?: KeyValueCache;
   fetch?: Fetcher;
 }
+
+export interface RequestDeduplicationResult {
+  policy: RequestDeduplicationPolicy;
+  deduplicatedAgainstPreviousRequest: boolean;
+}
 export interface DataSourceFetchResult<TResult> {
   parsedBody: TResult;
   response: FetcherResponse;
+  requestDeduplication: RequestDeduplicationResult;
   // This is primarily returned so that tests can be deterministic.
   cacheWritePromise: Promise<void> | undefined;
 }
@@ -257,10 +263,15 @@ export abstract class RESTDataSource {
   }
 
   private cloneDataSourceFetchResult<TResult>(
-    dataSourceFetchResult: DataSourceFetchResult<TResult>,
+    dataSourceFetchResult: Omit<
+      DataSourceFetchResult<TResult>,
+      'requestDeduplication'
+    >,
+    requestDeduplicationResult: RequestDeduplicationResult,
   ): DataSourceFetchResult<TResult> {
     return {
       ...dataSourceFetchResult,
+      requestDeduplication: requestDeduplicationResult,
       parsedBody: this.cloneParsedBody(dataSourceFetchResult.parsedBody),
     };
   }
@@ -413,7 +424,7 @@ export abstract class RESTDataSource {
 
   public async fetch<TResult>(
     path: string,
-    incomingRequest: DataSourceRequest,
+    incomingRequest: DataSourceRequest = {},
   ): Promise<DataSourceFetchResult<TResult>> {
     const augmentedRequest: AugmentedRequest = {
       ...incomingRequest,
@@ -511,7 +522,10 @@ export abstract class RESTDataSource {
       );
       if (previousRequestPromise)
         return previousRequestPromise.then((result) =>
-          this.cloneDataSourceFetchResult(result),
+          this.cloneDataSourceFetchResult(result, {
+            policy,
+            deduplicatedAgainstPreviousRequest: true,
+          }),
         );
 
       const thisRequestPromise = performRequest();
@@ -529,7 +543,10 @@ export abstract class RESTDataSource {
         // Note: we could try to get fancy and only clone if no de-duplication
         // happened (and we're "deduplicate-during-request-lifetime") but we
         // haven't quite bothered yet.
-        return this.cloneDataSourceFetchResult(await thisRequestPromise);
+        return this.cloneDataSourceFetchResult(await thisRequestPromise, {
+          policy,
+          deduplicatedAgainstPreviousRequest: false,
+        });
       } finally {
         if (policy.policy === 'deduplicate-during-request-lifetime') {
           this.deduplicationPromises.delete(policy.deduplicationKey);
@@ -539,7 +556,13 @@ export abstract class RESTDataSource {
       for (const key of policy.invalidateDeduplicationKeys ?? []) {
         this.deduplicationPromises.delete(key);
       }
-      return performRequest();
+      return {
+        ...(await performRequest()),
+        requestDeduplication: {
+          policy,
+          deduplicatedAgainstPreviousRequest: false,
+        },
+      };
     }
   }
 
