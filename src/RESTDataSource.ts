@@ -109,12 +109,16 @@ export interface RequestDeduplicationResult {
   policy: RequestDeduplicationPolicy;
   deduplicatedAgainstPreviousRequest: boolean;
 }
+
+export interface HTTPCacheResult {
+  // This is primarily returned so that tests can be deterministic.
+  cacheWritePromise: Promise<void> | undefined;
+}
 export interface DataSourceFetchResult<TResult> {
   parsedBody: TResult;
   response: FetcherResponse;
   requestDeduplication: RequestDeduplicationResult;
-  // This is primarily returned so that tests can be deterministic.
-  cacheWritePromise: Promise<void> | undefined;
+  httpCache: HTTPCacheResult;
 }
 
 // RESTDataSource has two layers of caching. The first layer is purely in-memory
@@ -501,7 +505,9 @@ export abstract class RESTDataSource {
           return {
             parsedBody: parsedBody as any as TResult,
             response,
-            cacheWritePromise,
+            httpCache: {
+              cacheWritePromise,
+            },
           };
         } catch (error) {
           this.didEncounterError(error as Error, outgoingRequest);

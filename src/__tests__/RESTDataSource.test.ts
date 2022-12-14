@@ -532,14 +532,15 @@ describe('RESTDataSource', () => {
           override baseURL = apiUrl;
 
           headFoo(id: number) {
-            return this.head(`foo/${id}`);
+            return this.fetch(`foo/${id}`, { method: 'HEAD' });
           }
         })();
 
         nock(apiUrl).head('/foo/1').reply(200);
         nock(apiUrl).head('/foo/1').reply(200);
 
-        await dataSource.headFoo(1);
+        const { httpCache } = await dataSource.headFoo(1);
+        expect(httpCache.cacheWritePromise).toBeUndefined();
         await dataSource.headFoo(1);
       });
 
@@ -548,7 +549,8 @@ describe('RESTDataSource', () => {
           override baseURL = apiUrl;
 
           headFoo(id: number) {
-            return this.head(`foo/${id}`, {
+            return this.fetch(`foo/${id}`, {
+              method: 'HEAD',
               cacheOptions: { ttl: 3000 },
             });
           }
@@ -557,7 +559,8 @@ describe('RESTDataSource', () => {
         nock(apiUrl).head('/foo/1').reply(200);
         nock(apiUrl).head('/foo/1').reply(200);
 
-        await dataSource.headFoo(1);
+        const { httpCache } = await dataSource.headFoo(1);
+        expect(httpCache.cacheWritePromise).toBeUndefined();
         await dataSource.headFoo(1);
       });
     });
@@ -1551,7 +1554,7 @@ describe('RESTDataSource', () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
           getFoo(id: number) {
-            return this.get(`foo/${id}`);
+            return this.fetch(`foo/${id}`);
           }
         })();
 
@@ -1560,7 +1563,9 @@ describe('RESTDataSource', () => {
           'cache-control': 'public, max-age=31536000, immutable',
         });
         nock(apiUrl).get('/foo/2').reply(200);
-        await dataSource.getFoo(1);
+        const { httpCache } = await dataSource.getFoo(1);
+        expect(httpCache.cacheWritePromise).toBeDefined();
+        await httpCache.cacheWritePromise;
 
         // Call a second time which should be cached
         await dataSource.getFoo(1);
@@ -1570,7 +1575,7 @@ describe('RESTDataSource', () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
           getFoo(id: number) {
-            return this.get(`foo/${id}`);
+            return this.fetch(`foo/${id}`);
           }
         })();
 
@@ -1579,7 +1584,8 @@ describe('RESTDataSource', () => {
           'cache-control': 'public, max-age=31536000, immutable',
         });
         nock(apiUrl).get('/foo/2').reply(200);
-        await dataSource.getFoo(1);
+        const { httpCache } = await dataSource.getFoo(1);
+        expect(httpCache.cacheWritePromise).toBeUndefined();
 
         // Call a second time which should NOT be cached (it's a temporary redirect!).
         nock(apiUrl).get('/foo/1').reply(302, '', {
@@ -1598,7 +1604,7 @@ describe('RESTDataSource', () => {
           }
 
           getFoo(id: number) {
-            return this.get(`foo/${id}`);
+            return this.fetch(`foo/${id}`);
           }
 
           // Set a long TTL for every request
@@ -1610,7 +1616,9 @@ describe('RESTDataSource', () => {
         })();
 
         nock(apiUrl).get('/foo/1').reply(200);
-        await dataSource.getFoo(1);
+        const { httpCache } = await dataSource.getFoo(1);
+        expect(httpCache.cacheWritePromise).toBeDefined();
+        await httpCache.cacheWritePromise;
 
         // Call a second time which should be cached
         await dataSource.getFoo(1);
@@ -1627,7 +1635,7 @@ describe('RESTDataSource', () => {
           }
 
           getFoo(id: number) {
-            return this.get(`foo/${id}`);
+            return this.fetch(`foo/${id}`);
           }
 
           // Set a short TTL for every request
@@ -1639,7 +1647,9 @@ describe('RESTDataSource', () => {
         })();
 
         nock(apiUrl).get('/foo/1').reply(200);
-        await dataSource.getFoo(1);
+        const { httpCache } = await dataSource.getFoo(1);
+        expect(httpCache.cacheWritePromise).toBeDefined();
+        await httpCache.cacheWritePromise;
 
         // expire the cache (note: 999ms, just shy of the 1s ttl, will reliably fail this test)
         jest.advanceTimersByTime(1000);
@@ -1655,7 +1665,7 @@ describe('RESTDataSource', () => {
           override baseURL = 'https://api.example.com';
 
           getFoo(id: number, shared: boolean) {
-            return this.get(`foo/${id}`, {
+            return this.fetch(`foo/${id}`, {
               httpCacheSemanticsCachePolicyOptions: { shared },
             });
           }
@@ -1666,7 +1676,9 @@ describe('RESTDataSource', () => {
           'set-cookie':
             'whatever=blah; expires=Mon, 01-Jan-2050 00:00:00 GMT; path=/; domain=www.example.com',
         });
-        await dataSource.getFoo(1, false);
+        const { httpCache } = await dataSource.getFoo(1, false);
+        expect(httpCache.cacheWritePromise).toBeDefined();
+        await httpCache.cacheWritePromise;
         // Call a second time which should be cached despite `set-cookie` due to
         // `shared: false`.
         await dataSource.getFoo(1, false);
@@ -1676,7 +1688,11 @@ describe('RESTDataSource', () => {
           'set-cookie':
             'whatever=blah; expires=Mon, 01-Jan-2050 00:00:00 GMT; path=/; domain=www.example.com',
         });
-        await dataSource.getFoo(2, true);
+        expect(
+          await (
+            await dataSource.getFoo(2, true)
+          ).httpCache.cacheWritePromise,
+        ).toBeUndefined();
         // Call a second time which should be not be cached because of
         // `set-cookie` with `shared: true`. (Note the `.times(2)` above.)
         await dataSource.getFoo(2, true);
@@ -1698,7 +1714,8 @@ describe('RESTDataSource', () => {
               hello: 'dolly, world',
               'set-cookie': ['first=foo', 'second=bar'],
             });
-          const { response } = await dataSource.postFoo();
+          const { response, httpCache } = await dataSource.postFoo();
+          expect(httpCache.cacheWritePromise).toBeUndefined();
           const { headers } = response;
           expect(headers.get('hello')).toBe('dolly, world');
           // The general Fetcher interface only lets you get the combined header values.
@@ -1737,7 +1754,8 @@ describe('RESTDataSource', () => {
 
           // First time: does HTTP then writes to cache.
           {
-            const { response } = await dataSource.postFoo();
+            const { response, httpCache } = await dataSource.postFoo();
+            expect(httpCache.cacheWritePromise).toBeDefined();
             const { headers } = response;
             expect(headers.get('hello')).toBe('dolly, world');
             // The general Fetcher interface only lets you get the combined header values.
@@ -1753,11 +1771,13 @@ describe('RESTDataSource', () => {
               'first=foo',
               'second=bar',
             ]);
+            await httpCache.cacheWritePromise;
           }
 
           // Second time: reads from cache.
           {
-            const { response } = await dataSource.postFoo();
+            const { response, httpCache } = await dataSource.postFoo();
+            expect(httpCache.cacheWritePromise).toBeUndefined();
             const { headers } = response;
             expect(headers.get('hello')).toBe('dolly, world');
             // The general Fetcher interface only lets you get the combined header values.
