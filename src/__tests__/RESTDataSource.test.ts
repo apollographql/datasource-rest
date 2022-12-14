@@ -2,6 +2,7 @@ import {
   AugmentedRequest,
   CacheOptions,
   DataSourceConfig,
+  DataSourceFetchResult,
   RequestDeduplicationPolicy,
   RequestOptions,
   RESTDataSource,
@@ -496,13 +497,34 @@ describe('RESTDataSource', () => {
           override baseURL = apiUrl;
 
           headFoo(id: number) {
-            return this.head(`foo/${id}`);
+            return this.fetch(`foo/${id}`, { method: 'HEAD' });
           }
         })();
 
         nock(apiUrl).head('/foo/1').reply(200);
 
-        await Promise.all([dataSource.headFoo(1), dataSource.headFoo(1)]);
+        const [r1, r2] = await Promise.all([
+          dataSource.headFoo(1),
+          dataSource.headFoo(1),
+        ]);
+        expect(r1.requestDeduplication).toMatchInlineSnapshot(`
+          {
+            "deduplicatedAgainstPreviousRequest": false,
+            "policy": {
+              "deduplicationKey": "HEAD https://api.example.com/foo/1",
+              "policy": "deduplicate-during-request-lifetime",
+            },
+          }
+        `);
+        expect(r2.requestDeduplication).toMatchInlineSnapshot(`
+          {
+            "deduplicatedAgainstPreviousRequest": true,
+            "policy": {
+              "deduplicationKey": "HEAD https://api.example.com/foo/1",
+              "policy": "deduplicate-during-request-lifetime",
+            },
+          }
+        `);
       });
 
       it('Does not cache HEAD results', async () => {
@@ -676,18 +698,55 @@ describe('RESTDataSource', () => {
     });
 
     describe('deduplication', () => {
+      function expectResult(r: DataSourceFetchResult<unknown>) {
+        return expect({
+          parsedBody: r.parsedBody,
+          requestDeduplication: r.requestDeduplication,
+        });
+      }
       it('de-duplicates simultaneous requests with the same cache key', async () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
 
           getFoo(id: number) {
-            return this.get(`foo/${id}`);
+            return this.fetch(`foo/${id}`, { method: 'GET' });
           }
         })();
 
-        nock(apiUrl).get('/foo/1').reply(200);
+        nock(apiUrl).get('/foo/1').reply(200, { hi: 42 });
 
-        await Promise.all([dataSource.getFoo(1), dataSource.getFoo(1)]);
+        const [r1, r2] = await Promise.all([
+          dataSource.getFoo(1),
+          dataSource.getFoo(1),
+        ]);
+        expectResult(r1).toMatchInlineSnapshot(`
+          {
+            "parsedBody": {
+              "hi": 42,
+            },
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "deduplicationKey": "GET https://api.example.com/foo/1",
+                "policy": "deduplicate-during-request-lifetime",
+              },
+            },
+          }
+        `);
+        expectResult(r2).toMatchInlineSnapshot(`
+          {
+            "parsedBody": {
+              "hi": 42,
+            },
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": true,
+              "policy": {
+                "deduplicationKey": "GET https://api.example.com/foo/1",
+                "policy": "deduplicate-during-request-lifetime",
+              },
+            },
+          }
+        `);
       });
 
       it('does not de-duplicate sequential requests with the same cache key', async () => {
@@ -695,14 +754,42 @@ describe('RESTDataSource', () => {
           override baseURL = 'https://api.example.com';
 
           getFoo(id: number) {
-            return this.get(`foo/${id}`);
+            return this.fetch(`foo/${id}`, { method: 'GET' });
           }
         })();
 
-        nock(apiUrl).get('/foo/1').reply(200);
-        nock(apiUrl).get('/foo/1').reply(200);
-        await dataSource.getFoo(1);
-        await dataSource.getFoo(1);
+        nock(apiUrl).get('/foo/1').reply(200, { hi: 42 });
+        nock(apiUrl).get('/foo/1').reply(200, { hi: 43 });
+        const r1 = await dataSource.getFoo(1);
+        const r2 = await dataSource.getFoo(1);
+        expectResult(r1).toMatchInlineSnapshot(`
+          {
+            "parsedBody": {
+              "hi": 42,
+            },
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "deduplicationKey": "GET https://api.example.com/foo/1",
+                "policy": "deduplicate-during-request-lifetime",
+              },
+            },
+          }
+        `);
+        expectResult(r2).toMatchInlineSnapshot(`
+          {
+            "parsedBody": {
+              "hi": 43,
+            },
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "deduplicationKey": "GET https://api.example.com/foo/1",
+                "policy": "deduplicate-during-request-lifetime",
+              },
+            },
+          }
+        `);
       });
 
       it('de-duplicates sequential requests with the same cache key with policy deduplicate-until-invalidated', async () => {
@@ -722,13 +809,41 @@ describe('RESTDataSource', () => {
           }
 
           getFoo(id: number) {
-            return this.get(`foo/${id}`);
+            return this.fetch(`foo/${id}`);
           }
         })();
 
-        nock(apiUrl).get('/foo/1').reply(200);
-        await dataSource.getFoo(1);
-        await dataSource.getFoo(1);
+        nock(apiUrl).get('/foo/1').reply(200, { hi: 42 });
+        const r1 = await dataSource.getFoo(1);
+        const r2 = await dataSource.getFoo(1);
+        expectResult(r1).toMatchInlineSnapshot(`
+          {
+            "parsedBody": {
+              "hi": 42,
+            },
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "deduplicationKey": "GET https://api.example.com/foo/1",
+                "policy": "deduplicate-until-invalidated",
+              },
+            },
+          }
+        `);
+        expectResult(r2).toMatchInlineSnapshot(`
+          {
+            "parsedBody": {
+              "hi": 42,
+            },
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": true,
+              "policy": {
+                "deduplicationKey": "GET https://api.example.com/foo/1",
+                "policy": "deduplicate-until-invalidated",
+              },
+            },
+          }
+        `);
       });
 
       it('does not deduplicate requests with a different cache key', async () => {
@@ -736,14 +851,45 @@ describe('RESTDataSource', () => {
           override baseURL = 'https://api.example.com';
 
           getFoo(id: number) {
-            return this.get(`foo/${id}`);
+            return this.fetch(`foo/${id}`);
           }
         })();
 
-        nock(apiUrl).get('/foo/1').reply(200);
-        nock(apiUrl).get('/foo/2').reply(200);
+        nock(apiUrl).get('/foo/1').reply(200, { foo: 1 });
+        nock(apiUrl).get('/foo/2').reply(200, { foo: 2 });
 
-        await Promise.all([dataSource.getFoo(1), dataSource.getFoo(2)]);
+        const [r1, r2] = await Promise.all([
+          dataSource.getFoo(1),
+          dataSource.getFoo(2),
+        ]);
+        expectResult(r1).toMatchInlineSnapshot(`
+          {
+            "parsedBody": {
+              "foo": 1,
+            },
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "deduplicationKey": "GET https://api.example.com/foo/1",
+                "policy": "deduplicate-during-request-lifetime",
+              },
+            },
+          }
+        `);
+        expectResult(r2).toMatchInlineSnapshot(`
+          {
+            "parsedBody": {
+              "foo": 2,
+            },
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "deduplicationKey": "GET https://api.example.com/foo/2",
+                "policy": "deduplicate-during-request-lifetime",
+              },
+            },
+          }
+        `);
       });
 
       it('returns a copy of the results and not a reference in case of modification', async () => {
@@ -751,10 +897,10 @@ describe('RESTDataSource', () => {
           override baseURL = 'https://api.example.com';
 
           async getFoo(id: number) {
-            let data = await this.get(`foo/${id}`);
-            data.foo.shift();
-            expect(data.foo.length).toEqual(1);
-            return data;
+            const result = await this.fetch<{ foo: object[] }>(`foo/${id}`);
+            result.parsedBody.foo.shift();
+            expect(result.parsedBody.foo.length).toEqual(1);
+            return result;
           }
         })();
 
@@ -762,7 +908,42 @@ describe('RESTDataSource', () => {
           .get('/foo/1')
           .reply(200, { foo: [{}, {}] });
 
-        await Promise.all([dataSource.getFoo(1), dataSource.getFoo(1)]);
+        const [r1, r2] = await Promise.all([
+          dataSource.getFoo(1),
+          dataSource.getFoo(1),
+        ]);
+        expectResult(r1).toMatchInlineSnapshot(`
+          {
+            "parsedBody": {
+              "foo": [
+                {},
+              ],
+            },
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "deduplicationKey": "GET https://api.example.com/foo/1",
+                "policy": "deduplicate-during-request-lifetime",
+              },
+            },
+          }
+        `);
+        expectResult(r2).toMatchInlineSnapshot(`
+          {
+            "parsedBody": {
+              "foo": [
+                {},
+              ],
+            },
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": true,
+              "policy": {
+                "deduplicationKey": "GET https://api.example.com/foo/1",
+                "policy": "deduplicate-during-request-lifetime",
+              },
+            },
+          }
+        `);
       });
 
       it('does not deduplicate non-GET requests by default', async () => {
@@ -770,14 +951,47 @@ describe('RESTDataSource', () => {
           override baseURL = 'https://api.example.com';
 
           postFoo(id: number) {
-            return this.post(`foo/${id}`);
+            return this.fetch(`foo/${id}`, { method: 'POST' });
           }
         })();
 
         nock(apiUrl).post('/foo/1').reply(200);
         nock(apiUrl).post('/foo/1').reply(200);
 
-        await Promise.all([dataSource.postFoo(1), dataSource.postFoo(1)]);
+        const [r1, r2] = await Promise.all([
+          dataSource.postFoo(1),
+          dataSource.postFoo(1),
+        ]);
+        expectResult(r1).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "invalidateDeduplicationKeys": [
+                  "GET https://api.example.com/foo/1",
+                  "HEAD https://api.example.com/foo/1",
+                ],
+                "policy": "do-not-deduplicate",
+              },
+            },
+          }
+        `);
+        expectResult(r2).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "invalidateDeduplicationKeys": [
+                  "GET https://api.example.com/foo/1",
+                  "HEAD https://api.example.com/foo/1",
+                ],
+                "policy": "do-not-deduplicate",
+              },
+            },
+          }
+        `);
       });
 
       it('non-GET request invalidates deduplication of request with the same cache key', async () => {
@@ -785,11 +999,11 @@ describe('RESTDataSource', () => {
           override baseURL = 'https://api.example.com';
 
           getFoo(id: number) {
-            return this.get(`foo/${id}`);
+            return this.fetch(`foo/${id}`, { method: 'GET' });
           }
 
           postFoo(id: number) {
-            return this.post(`foo/${id}`);
+            return this.fetch(`foo/${id}`, { method: 'POST' });
           }
         })();
 
@@ -797,11 +1011,50 @@ describe('RESTDataSource', () => {
         nock(apiUrl).post('/foo/1').reply(200);
         nock(apiUrl).get('/foo/1').reply(200);
 
-        await Promise.all([
+        const [r1, r2, r3] = await Promise.all([
           dataSource.getFoo(1),
           dataSource.postFoo(1),
           dataSource.getFoo(1),
         ]);
+        expectResult(r1).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "deduplicationKey": "GET https://api.example.com/foo/1",
+                "policy": "deduplicate-during-request-lifetime",
+              },
+            },
+          }
+        `);
+        expectResult(r2).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "invalidateDeduplicationKeys": [
+                  "GET https://api.example.com/foo/1",
+                  "HEAD https://api.example.com/foo/1",
+                ],
+                "policy": "do-not-deduplicate",
+              },
+            },
+          }
+        `);
+        expectResult(r3).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "deduplicationKey": "GET https://api.example.com/foo/1",
+                "policy": "deduplicate-during-request-lifetime",
+              },
+            },
+          }
+        `);
       });
 
       it('non-GET request invalidates deduplication of request with the same cache key with deduplicate-until-invalidated', async () => {
@@ -821,11 +1074,11 @@ describe('RESTDataSource', () => {
           }
 
           getFoo(id: number) {
-            return this.get(`foo/${id}`);
+            return this.fetch(`foo/${id}`);
           }
 
           postFoo(id: number) {
-            return this.post(`foo/${id}`);
+            return this.fetch(`foo/${id}`, { method: 'POST' });
           }
         })();
 
@@ -833,9 +1086,48 @@ describe('RESTDataSource', () => {
         nock(apiUrl).post('/foo/1').reply(200);
         nock(apiUrl).get('/foo/1').reply(200);
 
-        await dataSource.getFoo(1);
-        await dataSource.postFoo(1);
-        await dataSource.getFoo(1);
+        const r1 = await dataSource.getFoo(1);
+        const r2 = await dataSource.postFoo(1);
+        const r3 = await dataSource.getFoo(1);
+        expectResult(r1).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "deduplicationKey": "GET https://api.example.com/foo/1",
+                "policy": "deduplicate-until-invalidated",
+              },
+            },
+          }
+        `);
+        expectResult(r2).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "invalidateDeduplicationKeys": [
+                  "GET https://api.example.com/foo/1",
+                  "HEAD https://api.example.com/foo/1",
+                ],
+                "policy": "do-not-deduplicate",
+              },
+            },
+          }
+        `);
+        expectResult(r3).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "deduplicationKey": "GET https://api.example.com/foo/1",
+                "policy": "deduplicate-until-invalidated",
+              },
+            },
+          }
+        `);
       });
 
       it('HEAD request does not invalidate deduplication of request with the same cache key with deduplicate-until-invalidated', async () => {
@@ -855,20 +1147,56 @@ describe('RESTDataSource', () => {
           }
 
           getFoo(id: number) {
-            return this.get(`foo/${id}`);
+            return this.fetch(`foo/${id}`);
           }
 
           headFoo(id: number) {
-            return this.head(`foo/${id}`);
+            return this.fetch(`foo/${id}`, { method: 'HEAD' });
           }
         })();
 
         nock(apiUrl).get('/foo/1').reply(200);
         nock(apiUrl).head('/foo/1').reply(200);
 
-        await dataSource.getFoo(1);
-        await dataSource.headFoo(1);
-        await dataSource.getFoo(1);
+        const r1 = await dataSource.getFoo(1);
+        const r2 = await dataSource.headFoo(1);
+        const r3 = await dataSource.getFoo(1);
+        expectResult(r1).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "deduplicationKey": "GET https://api.example.com/foo/1",
+                "policy": "deduplicate-until-invalidated",
+              },
+            },
+          }
+        `);
+        expectResult(r2).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "deduplicationKey": "HEAD https://api.example.com/foo/1",
+                "policy": "deduplicate-until-invalidated",
+              },
+            },
+          }
+        `);
+        expectResult(r3).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": true,
+              "policy": {
+                "deduplicationKey": "GET https://api.example.com/foo/1",
+                "policy": "deduplicate-until-invalidated",
+              },
+            },
+          }
+        `);
       });
 
       it('allows specifying a custom cache key via cacheKeyFor', async () => {
@@ -882,7 +1210,7 @@ describe('RESTDataSource', () => {
           }
 
           getFoo(id: number, apiKey: string) {
-            return this.get(`foo/${id}`, {
+            return this.fetch(`foo/${id}`, {
               params: { api_key: apiKey },
             });
           }
@@ -890,10 +1218,34 @@ describe('RESTDataSource', () => {
 
         nock(apiUrl).get('/foo/1').query({ api_key: 'secret' }).reply(200);
 
-        await Promise.all([
+        const [r1, r2] = await Promise.all([
           dataSource.getFoo(1, 'secret'),
           dataSource.getFoo(1, 'anotherSecret'),
         ]);
+        expectResult(r1).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "deduplicationKey": "https://api.example.com/foo/1",
+                "policy": "deduplicate-during-request-lifetime",
+              },
+            },
+          }
+        `);
+        expectResult(r2).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": true,
+              "policy": {
+                "deduplicationKey": "https://api.example.com/foo/1",
+                "policy": "deduplicate-during-request-lifetime",
+              },
+            },
+          }
+        `);
       });
 
       it('allows specifying a custom cache key via cacheKey used for deduplication', async () => {
@@ -901,7 +1253,7 @@ describe('RESTDataSource', () => {
           override baseURL = 'https://api.example.com';
 
           getFoo(id: number) {
-            return this.get(`foo/${id}`, {
+            return this.fetch(`foo/${id}`, {
               cacheKey: 'constant',
             });
           }
@@ -909,7 +1261,34 @@ describe('RESTDataSource', () => {
 
         nock(apiUrl).get('/foo/1').reply(200);
 
-        await Promise.all([dataSource.getFoo(1), dataSource.getFoo(2)]);
+        const [r1, r2] = await Promise.all([
+          dataSource.getFoo(1),
+          dataSource.getFoo(2),
+        ]);
+        expectResult(r1).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "deduplicationKey": "constant",
+                "policy": "deduplicate-during-request-lifetime",
+              },
+            },
+          }
+        `);
+        expectResult(r2).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": true,
+              "policy": {
+                "deduplicationKey": "constant",
+                "policy": "deduplicate-during-request-lifetime",
+              },
+            },
+          }
+        `);
       });
 
       it('allows specifying a custom cache key via cacheKey used for HTTP-header-sensitive cache', async () => {
@@ -920,7 +1299,7 @@ describe('RESTDataSource', () => {
           }
 
           getFoo(id: number) {
-            return this.get(`foo/${id}`, {
+            return this.fetch(`foo/${id}`, {
               cacheKey: 'constant',
             });
           }
@@ -930,8 +1309,30 @@ describe('RESTDataSource', () => {
           .get('/foo/1')
           .reply(200, '{}', { 'cache-control': 'max-age=60' });
 
-        await dataSource.getFoo(1);
-        await dataSource.getFoo(2);
+        const r1 = await dataSource.getFoo(1);
+        const r2 = await dataSource.getFoo(2);
+        expectResult(r1).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "{}",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "policy": "do-not-deduplicate",
+              },
+            },
+          }
+        `);
+        expectResult(r2).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "{}",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "policy": "do-not-deduplicate",
+              },
+            },
+          }
+        `);
       });
 
       it('allows disabling deduplication', async () => {
@@ -942,7 +1343,7 @@ describe('RESTDataSource', () => {
           }
 
           getFoo(id: number) {
-            return this.get(`foo/${id}`);
+            return this.fetch(`foo/${id}`);
           }
         })();
 
@@ -950,7 +1351,32 @@ describe('RESTDataSource', () => {
         nock(apiUrl).get('/foo/1').reply(200);
 
         // Expect two calls to pass
-        await Promise.all([dataSource.getFoo(1), dataSource.getFoo(1)]);
+        const [r1, r2] = await Promise.all([
+          dataSource.getFoo(1),
+          dataSource.getFoo(1),
+        ]);
+        expectResult(r1).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "policy": "do-not-deduplicate",
+              },
+            },
+          }
+        `);
+        expectResult(r2).toMatchInlineSnapshot(`
+          {
+            "parsedBody": "",
+            "requestDeduplication": {
+              "deduplicatedAgainstPreviousRequest": false,
+              "policy": {
+                "policy": "do-not-deduplicate",
+              },
+            },
+          }
+        `);
       });
     });
 
