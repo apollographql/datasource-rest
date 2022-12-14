@@ -1,4 +1,8 @@
-import fetch, { Response } from 'node-fetch';
+import nodeFetch, {
+  Response as NodeFetchResponse,
+  Headers as NodeFetchHeaders,
+  type HeadersInit as NodeFetchHeadersInit,
+} from 'node-fetch';
 import CachePolicy from 'http-cache-semantics';
 import type { Options as HttpCacheSemanticsOptions } from 'http-cache-semantics';
 import type {
@@ -27,13 +31,18 @@ interface SneakyCachePolicy extends CachePolicy {
   age(): number;
 }
 
+interface ResponseWithCacheWritePromise {
+  response: FetcherResponse;
+  cacheWritePromise?: Promise<void>;
+}
+
 export class HTTPCache {
   private keyValueCache: KeyValueCache;
   private httpFetch: Fetcher;
 
   constructor(
     keyValueCache: KeyValueCache = new InMemoryLRUCache(),
-    httpFetch: Fetcher = fetch,
+    httpFetch: Fetcher = nodeFetch,
   ) {
     this.keyValueCache = new PrefixingKeyValueCache(
       keyValueCache,
@@ -56,7 +65,7 @@ export class HTTPCache {
           ) => ValueOrPromise<CacheOptions | undefined>);
       httpCacheSemanticsCachePolicyOptions?: HttpCacheSemanticsOptions;
     },
-  ): Promise<FetcherResponse> {
+  ): Promise<ResponseWithCacheWritePromise> {
     const urlString = url.toString();
     requestOpts.method = requestOpts.method ?? 'GET';
     const cacheKey = cache?.cacheKey ?? urlString;
@@ -67,7 +76,7 @@ export class HTTPCache {
     // refreshing headers with HEAD requests, responding to HEADs with cached
     // and valid GETs, etc.)
     if (requestOpts.method === 'HEAD') {
-      return await this.httpFetch(urlString, requestOpts);
+      return { response: await this.httpFetch(urlString, requestOpts) };
     }
 
     const entry = await this.keyValueCache.get(cacheKey);
@@ -113,11 +122,13 @@ export class HTTPCache {
       // the cache entry was not created with an explicit TTL override and the
       // header-based cache policy says we can safely use the cached response.
       const headers = policy.responseHeaders();
-      return new Response(body, {
-        url: urlFromPolicy,
-        status: policy._status,
-        headers: normalizeHeaders(headers),
-      });
+      return {
+        response: new NodeFetchResponse(body, {
+          url: urlFromPolicy,
+          status: policy._status,
+          headers: cachePolicyHeadersToNodeFetchHeadersInit(headers),
+        }),
+      };
     } else {
       // We aren't sure that we're allowed to use the cached response, so we are
       // going to actually do a fetch. However, we may have one extra trick up
@@ -139,7 +150,7 @@ export class HTTPCache {
       );
       const revalidationRequest: RequestOptions = {
         ...requestOpts,
-        headers: normalizeHeaders(revalidationHeaders),
+        headers: cachePolicyHeadersToFetcherHeadersInit(revalidationHeaders),
       };
       const revalidationResponse = await this.httpFetch(
         urlString,
@@ -153,11 +164,16 @@ export class HTTPCache {
 
       return this.storeResponseAndReturnClone(
         urlString,
-        new Response(modified ? await revalidationResponse.text() : body, {
-          url: revalidatedPolicy._url,
-          status: revalidatedPolicy._status,
-          headers: normalizeHeaders(revalidatedPolicy.responseHeaders()),
-        }),
+        new NodeFetchResponse(
+          modified ? await revalidationResponse.text() : body,
+          {
+            url: revalidatedPolicy._url,
+            status: revalidatedPolicy._status,
+            headers: cachePolicyHeadersToNodeFetchHeadersInit(
+              revalidatedPolicy.responseHeaders(),
+            ),
+          },
+        ),
         requestOpts,
         revalidatedPolicy,
         cacheKey,
@@ -179,7 +195,7 @@ export class HTTPCache {
           response: FetcherResponse,
           request: RequestOptions,
         ) => ValueOrPromise<CacheOptions | undefined>),
-  ): Promise<FetcherResponse> {
+  ): Promise<ResponseWithCacheWritePromise> {
     if (typeof cacheOptions === 'function') {
       cacheOptions = await cacheOptions(url, response, request);
     }
@@ -192,14 +208,14 @@ export class HTTPCache {
       // Without an override, we only cache GET requests and respect standard HTTP cache semantics
       !(request.method === 'GET' && policy.storable())
     ) {
-      return response;
+      return { response };
     }
 
     let ttl =
       ttlOverride === undefined
         ? Math.round(policy.timeToLive() / 1000)
         : ttlOverride;
-    if (ttl <= 0) return response;
+    if (ttl <= 0) return { response };
 
     // If a response can be revalidated, we don't want to remove it from the
     // cache right after it expires. (See the comment above the call to
@@ -209,6 +225,47 @@ export class HTTPCache {
       ttl *= 2;
     }
 
+    // Clone the response and return it. In the background, read the original
+    // response and write it to the cache. The caller is responsible for
+    // `await`ing or `catch`ing `cacheWritePromise`. (By default, RESTDataSource
+    // `catch`es it with `console.log`.)
+    //
+    // When you clone a response, you're generally expected (at least by
+    // node-fetch: https://github.com/node-fetch/node-fetch/issues/151) to read
+    // both bodies in parallel; if you only read one of them and ignore the
+    // other, the one you're reading might start blocking once the second one's
+    // buffer fills. We don't think this is a real problem here: we do
+    // immediately read from the one we're writing to the cache, and if the
+    // caller doesn't bother to read its response, the only real downside is
+    // that we won't ever write to the cache, which seems maybe OK for an
+    // "ignored" body. (It could perhaps lead to a memory leak, but the answer
+    // there is to make sure your parseBody override does consume the response.)
+    const returnedResponse = response.clone();
+    return {
+      response: returnedResponse,
+      cacheWritePromise: this.readResponseAndWriteToCache({
+        response,
+        policy,
+        ttl,
+        ttlOverride,
+        cacheKey,
+      }),
+    };
+  }
+
+  private async readResponseAndWriteToCache({
+    response,
+    policy,
+    ttl,
+    ttlOverride,
+    cacheKey,
+  }: {
+    response: FetcherResponse;
+    policy: CachePolicy;
+    ttl: number | null | undefined;
+    ttlOverride: number | undefined;
+    cacheKey: string;
+  }): Promise<void> {
     const body = await response.text();
     const entry = JSON.stringify({
       policy: policy.toObject(),
@@ -218,17 +275,6 @@ export class HTTPCache {
 
     await this.keyValueCache.set(cacheKey, entry, {
       ttl,
-    });
-
-    // We have to clone the response before returning it because the
-    // body can only be used once.
-    // To avoid https://github.com/bitinn/node-fetch/issues/151, we don't use
-    // response.clone() but create a new response from the consumed body
-    return new Response(body, {
-      url: response.url,
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers),
     });
   }
 }
@@ -248,26 +294,71 @@ function policyRequestFrom(url: string, request: RequestOptions) {
 function policyResponseFrom(response: FetcherResponse) {
   return {
     status: response.status,
-    headers: Object.fromEntries(response.headers),
+    headers:
+      response.headers instanceof NodeFetchHeaders
+        ? nodeFetchHeadersToCachePolicyHeaders(response.headers)
+        : Object.fromEntries(response.headers),
   };
 }
 
-// When CachePolicy gives us headers back, it is declared to have the same
-// structure as Node's built in res.headers, where values might be arrays.
-// However, we use fetch to do the actual HTTP calls, and fetch's response
-// headers always map string to string: ie, the input to CachePolicy always
-// comes from `policyResponseFrom` above`. So we can be pretty confident that
-// the values in this map are strings (not arrays or numbers), as long as
-// CachePolicy itself doesn't add arrays or numbers (and it doesn't appear to
-// now). So we just do a cast (after double-checking that we didn't miss
-// something).
-function normalizeHeaders(
+// In the special case that these headers come from node-fetch, uses
+// node-fetch's `raw()` method (which returns a `Record<string, string[]>`) to
+// create our CachePolicy.Headers. Note that while we could theoretically just
+// return `headers.raw()` here (it does match the typing of
+// CachePolicy.Headers), `http-cache-semantics` sadly does expect most of the
+// headers it pays attention to to only show up once (see eg
+// https://github.com/kornelski/http-cache-semantics/issues/28). We want to
+// preserve the multiplicity of other headers that CachePolicy doesn't parse
+// (like set-cookie) because we store the CachePolicy in the cache, but not the
+// interesting ones that we hope were singletons, so this function
+// de-singletonizes singleton response headers.
+function nodeFetchHeadersToCachePolicyHeaders(
+  headers: NodeFetchHeaders,
+): CachePolicy.Headers {
+  const cachePolicyHeaders = Object.create(null);
+  for (const [name, values] of Object.entries(headers.raw())) {
+    cachePolicyHeaders[name] = values.length === 1 ? values[0] : values;
+  }
+  return cachePolicyHeaders;
+}
+
+// CachePolicy.Headers can store header values as string or string-array (for
+// duplicate headers). Convert it to "list of pairs", which is a valid
+// `node-fetch` constructor argument and will preserve the separation of
+// duplicate headers.
+function cachePolicyHeadersToNodeFetchHeadersInit(
   headers: CachePolicy.Headers,
-): Record<string, string> {
+): NodeFetchHeadersInit {
+  const headerList = [];
   for (const [name, value] of Object.entries(headers)) {
-    if (typeof value !== 'string') {
-      throw new Error(`Surprising type ${typeof value} for header ${name}`);
+    if (typeof value === 'string') {
+      headerList.push([name, value]);
+    } else if (value) {
+      for (const subValue of value) {
+        headerList.push([name, subValue]);
+      }
     }
   }
-  return headers as Record<string, string>;
+  return headerList;
+}
+
+// CachePolicy.Headers can store header values as string or string-array (for
+// duplicate headers). Convert it to "Record of strings", which is all we allow
+// for HeadersInit in Fetcher. (Perhaps we should expand that definition in
+// `@apollo/utils.fetcher` to allow HeadersInit to be `string[][]` too; then we
+// could use the same function as cachePolicyHeadersToNodeFetchHeadersInit here
+// which would let us more properly support duplicate headers in *requests* if
+// using node-fetch.)
+function cachePolicyHeadersToFetcherHeadersInit(
+  headers: CachePolicy.Headers,
+): Record<string, string> {
+  const headerRecord = Object.create(null);
+  for (const [name, value] of Object.entries(headers)) {
+    if (typeof value === 'string') {
+      headerRecord[name] = value;
+    } else if (value) {
+      headerRecord[name] = value.join(', ');
+    }
+  }
+  return headerRecord;
 }

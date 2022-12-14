@@ -104,6 +104,12 @@ export interface DataSourceConfig {
   cache?: KeyValueCache;
   fetch?: Fetcher;
 }
+export interface DataSourceFetchResult<TResult> {
+  parsedBody: TResult;
+  response: FetcherResponse;
+  // This is primarily returned so that tests can be deterministic.
+  cacheWritePromise: Promise<void> | undefined;
+}
 
 // RESTDataSource has two layers of caching. The first layer is purely in-memory
 // within a single RESTDataSource object and is called "request deduplication".
@@ -224,6 +230,14 @@ export abstract class RESTDataSource {
     throw error;
   }
 
+  // Reads the body of the response and returns it in parsed form. If you want
+  // to process data in some other way (eg, reading binary data), override this
+  // method. It's important that the body always read in full (otherwise the
+  // clone of this response that is being read to write to the HTTPCache could
+  // block and lead to a memory leak).
+  //
+  // If you override this to return interesting new mutable data types, override
+  // cloneParsedBody too.
   protected parseBody(response: FetcherResponse): Promise<object | string> {
     const contentType = response.headers.get('Content-Type');
     const contentLength = response.headers.get('Content-Length');
@@ -239,6 +253,23 @@ export abstract class RESTDataSource {
       return response.json();
     } else {
       return response.text();
+    }
+  }
+
+  private cloneDataSourceFetchResult<TResult>(
+    dataSourceFetchResult: DataSourceFetchResult<TResult>,
+  ): DataSourceFetchResult<TResult> {
+    return {
+      ...dataSourceFetchResult,
+      parsedBody: this.cloneParsedBody(dataSourceFetchResult.parsedBody),
+    };
+  }
+
+  protected cloneParsedBody<TResult>(parsedBody: TResult) {
+    if (typeof parsedBody === 'string') {
+      return parsedBody;
+    } else {
+      return JSON.parse(JSON.stringify(parsedBody));
     }
   }
 
@@ -383,7 +414,7 @@ export abstract class RESTDataSource {
   public async fetch<TResult>(
     path: string,
     incomingRequest: DataSourceRequest,
-  ): Promise<{ parsedBody: TResult; response: FetcherResponse }> {
+  ): Promise<DataSourceFetchResult<TResult>> {
     const augmentedRequest: AugmentedRequest = {
       ...incomingRequest,
       // guarantee params and headers objects before calling `willSendRequest` for convenience
@@ -432,12 +463,20 @@ export abstract class RESTDataSource {
           ? outgoingRequest.cacheOptions
           : this.cacheOptionsFor?.bind(this);
         try {
-          const response = await this.httpCache.fetch(url, outgoingRequest, {
-            cacheKey,
-            cacheOptions,
-            httpCacheSemanticsCachePolicyOptions:
-              outgoingRequest.httpCacheSemanticsCachePolicyOptions,
-          });
+          const { response, cacheWritePromise } = await this.httpCache.fetch(
+            url,
+            outgoingRequest,
+            {
+              cacheKey,
+              cacheOptions,
+              httpCacheSemanticsCachePolicyOptions:
+                outgoingRequest.httpCacheSemanticsCachePolicyOptions,
+            },
+          );
+
+          if (cacheWritePromise) {
+            this.catchCacheWritePromiseErrors(cacheWritePromise);
+          }
 
           const parsedBody = await this.parseBody(response);
 
@@ -451,6 +490,7 @@ export abstract class RESTDataSource {
           return {
             parsedBody: parsedBody as any as TResult,
             response,
+            cacheWritePromise,
           };
         } catch (error) {
           this.didEncounterError(error as Error, outgoingRequest);
@@ -469,7 +509,10 @@ export abstract class RESTDataSource {
       const previousRequestPromise = this.deduplicationPromises.get(
         policy.deduplicationKey,
       );
-      if (previousRequestPromise) return previousRequestPromise;
+      if (previousRequestPromise)
+        return previousRequestPromise.then((result) =>
+          this.cloneDataSourceFetchResult(result),
+        );
 
       const thisRequestPromise = performRequest();
       this.deduplicationPromises.set(
@@ -482,7 +525,11 @@ export abstract class RESTDataSource {
         // from the cache. Additionally, the use of finally here guarantees the
         // deduplication cache is cleared in the event of an error during the
         // request.
-        return await thisRequestPromise;
+        //
+        // Note: we could try to get fancy and only clone if no de-duplication
+        // happened (and we're "deduplicate-during-request-lifetime") but we
+        // haven't quite bothered yet.
+        return this.cloneDataSourceFetchResult(await thisRequestPromise);
       } finally {
         if (policy.policy === 'deduplicate-during-request-lifetime') {
           this.deduplicationPromises.delete(policy.deduplicationKey);
@@ -494,6 +541,13 @@ export abstract class RESTDataSource {
       }
       return performRequest();
     }
+  }
+
+  // Override this method to handle these errors in a different way.
+  protected catchCacheWritePromiseErrors(cacheWritePromise: Promise<void>) {
+    cacheWritePromise.catch((e) => {
+      console.error(`Error writing from RESTDataSource to cache: ${e}`);
+    });
   }
 
   protected async trace<TResult>(
