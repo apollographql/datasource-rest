@@ -12,6 +12,7 @@ import { GraphQLError } from 'graphql';
 import nock from 'nock';
 import { nockAfterEach, nockBeforeEach } from './nockAssertions';
 import type { WithRequired } from '@apollo/utils.withrequired';
+import { Headers as NodeFetchHeaders } from 'node-fetch';
 
 const apiUrl = 'https://api.example.com';
 
@@ -1234,6 +1235,101 @@ describe('RESTDataSource', () => {
         // Call a second time which should be not be cached because of
         // `set-cookie` with `shared: true`. (Note the `.times(2)` above.)
         await dataSource.getFoo(2, true);
+      });
+
+      describe('raw header access when using node-fetch', () => {
+        it('for a non-cacheable request', async () => {
+          const dataSource = new (class extends RESTDataSource {
+            override baseURL = 'https://api.example.com';
+
+            postFoo() {
+              return this.fetch('foo', { method: 'POST' });
+            }
+          })();
+
+          nock(apiUrl)
+            .post('/foo')
+            .reply(200, '{}', {
+              hello: 'dolly, world',
+              'set-cookie': ['first=foo', 'second=bar'],
+            });
+          const { response } = await dataSource.postFoo();
+          const { headers } = response;
+          expect(headers.get('hello')).toBe('dolly, world');
+          // The general Fetcher interface only lets you get the combined header values.
+          expect(headers.get('set-cookie')).toBe('first=foo, second=bar');
+
+          if (!(headers instanceof NodeFetchHeaders)) {
+            fail(
+              'headers should be a NodeFetchHeaders when fetcher not overridden',
+            );
+          }
+          expect(headers.raw()['hello']).toStrictEqual(['dolly, world']);
+          expect(headers.raw()['set-cookie']).toStrictEqual([
+            'first=foo',
+            'second=bar',
+          ]);
+        });
+
+        it('for a cacheable but not de-duped request', async () => {
+          const dataSource = new (class extends RESTDataSource {
+            override baseURL = 'https://api.example.com';
+
+            postFoo() {
+              return this.fetch('foo', {
+                method: 'POST',
+                cacheOptions: { ttl: 60 },
+              });
+            }
+          })();
+
+          nock(apiUrl)
+            .post('/foo')
+            .reply(200, '{}', {
+              hello: 'dolly, world',
+              'set-cookie': ['first=foo', 'second=bar'],
+            });
+
+          // First time: does HTTP then writes to cache.
+          {
+            const { response } = await dataSource.postFoo();
+            const { headers } = response;
+            expect(headers.get('hello')).toBe('dolly, world');
+            // The general Fetcher interface only lets you get the combined header values.
+            expect(headers.get('set-cookie')).toBe('first=foo, second=bar');
+
+            if (!(headers instanceof NodeFetchHeaders)) {
+              fail(
+                'headers should be a NodeFetchHeaders when fetcher not overridden',
+              );
+            }
+            expect(headers.raw()['hello']).toStrictEqual(['dolly, world']);
+            expect(headers.raw()['set-cookie']).toStrictEqual([
+              'first=foo',
+              'second=bar',
+            ]);
+          }
+
+          // Second time: reads from cache.
+          {
+            const { response } = await dataSource.postFoo();
+            const { headers } = response;
+            expect(headers.get('hello')).toBe('dolly, world');
+            // The general Fetcher interface only lets you get the combined header values.
+            expect(headers.get('set-cookie')).toBe('first=foo, second=bar');
+
+            if (!(headers instanceof NodeFetchHeaders)) {
+              fail(
+                'headers should be a NodeFetchHeaders when fetcher not overridden',
+              );
+            }
+            expect(headers.raw()['hello']).toStrictEqual(['dolly, world']);
+            expect(headers.raw()['set-cookie']).toStrictEqual([
+              'first=foo',
+              'second=bar',
+            ]);
+          }
+        });
       });
     });
 

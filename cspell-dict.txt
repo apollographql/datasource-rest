@@ -17,5 +17,6 @@ isplainobject
 keyvaluecache
 overridable
 revalidates
+singletonizes
 unmock
 withrequired

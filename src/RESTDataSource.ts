@@ -224,6 +224,11 @@ export abstract class RESTDataSource {
     throw error;
   }
 
+  // Reads the body of the response and returns it in parsed form. If you want
+  // to process data in some other way (eg, reading binary data), override this
+  // method. It's important that the body always read in full (otherwise the
+  // clone of this response that is being read to write to the HTTPCache could
+  // block and lead to a memory leak).
   protected parseBody(response: FetcherResponse): Promise<object | string> {
     const contentType = response.headers.get('Content-Type');
     const contentLength = response.headers.get('Content-Length');
@@ -383,7 +388,12 @@ export abstract class RESTDataSource {
   public async fetch<TResult>(
     path: string,
     incomingRequest: DataSourceRequest,
-  ): Promise<{ parsedBody: TResult; response: FetcherResponse }> {
+  ): Promise<{
+    parsedBody: TResult;
+    response: FetcherResponse;
+    // This is primarily returned so that tests can be deterministic.
+    cacheWritePromise: Promise<void> | undefined;
+  }> {
     const augmentedRequest: AugmentedRequest = {
       ...incomingRequest,
       // guarantee params and headers objects before calling `willSendRequest` for convenience
@@ -432,12 +442,20 @@ export abstract class RESTDataSource {
           ? outgoingRequest.cacheOptions
           : this.cacheOptionsFor?.bind(this);
         try {
-          const response = await this.httpCache.fetch(url, outgoingRequest, {
-            cacheKey,
-            cacheOptions,
-            httpCacheSemanticsCachePolicyOptions:
-              outgoingRequest.httpCacheSemanticsCachePolicyOptions,
-          });
+          const { response, cacheWritePromise } = await this.httpCache.fetch(
+            url,
+            outgoingRequest,
+            {
+              cacheKey,
+              cacheOptions,
+              httpCacheSemanticsCachePolicyOptions:
+                outgoingRequest.httpCacheSemanticsCachePolicyOptions,
+            },
+          );
+
+          if (cacheWritePromise) {
+            this.catchCacheWritePromiseErrors(cacheWritePromise);
+          }
 
           const parsedBody = await this.parseBody(response);
 
@@ -451,6 +469,7 @@ export abstract class RESTDataSource {
           return {
             parsedBody: parsedBody as any as TResult,
             response,
+            cacheWritePromise,
           };
         } catch (error) {
           this.didEncounterError(error as Error, outgoingRequest);
@@ -494,6 +513,13 @@ export abstract class RESTDataSource {
       }
       return performRequest();
     }
+  }
+
+  // Override this method to handle these errors in a different way.
+  protected catchCacheWritePromiseErrors(cacheWritePromise: Promise<void>) {
+    cacheWritePromise.catch((e) => {
+      console.error(`Error writing from RESTDataSource to cache: ${e}`);
+    });
   }
 
   protected async trace<TResult>(
