@@ -37,7 +37,7 @@
     "@changesets/cli": "2.25.2",
     "@types/jest": "29.2.4",
     "@types/lodash.isplainobject": "4.0.7",
-    "@types/node": "14.18.34",
+    "@types/node": "14.18.35",
     "cspell": "6.17.0",
     "form-data": "4.0.0",
     "graphql": "16.6.0",
