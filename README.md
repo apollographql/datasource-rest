@@ -216,7 +216,7 @@ After the body is parsed, this method checks a condition (by default, if the HTT
 
 Creates an error based on the response.
 
-##### `cacheCacheWritePromiseErrors`
+##### `catchCacheWritePromiseErrors`
 
 This class writes to the shared HTTP-header-sensitive cache in the background (ie, the write is not awaited as part of the HTTP fetch). It passes the `Promise` associated with that cache write to this method. By default, this method adds a `catch` handler to the `Promise` which writes any errors to `console.error`. You could use this to do different error handling, or to do no error handling if you trust all callers to use the `fetch` method and await `httpCache.cacheWritePromise`.
 
@@ -316,7 +316,7 @@ class PersonalizationAPI extends RESTDataSource {
 
 ### Integration with Apollo Server
 
-To give resolvers access to data sources, you pass them as options to the `ApolloServer` constructor. (The following example uses the Apollo Server 4 API.)
+To give resolvers access to data sources, you create and return them from your `context` function. (The following example uses the Apollo Server 4 API.)
 
 ```ts
 interface MyContext {
