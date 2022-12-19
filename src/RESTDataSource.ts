@@ -151,7 +151,7 @@ export type RequestDeduplicationPolicy =
   | { policy: 'do-not-deduplicate'; invalidateDeduplicationKeys?: string[] };
 
 export abstract class RESTDataSource {
-  httpCache: HTTPCache;
+  protected httpCache: HTTPCache;
   protected deduplicationPromises = new Map<string, Promise<any>>();
   baseURL?: string;
 

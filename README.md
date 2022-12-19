@@ -2,11 +2,16 @@
 
 This package exports a ([`RESTDataSource`](https://github.com/apollographql/datasource-rest#apollo-rest-data-source)) class which is used for fetching data from a REST API and exposing it via GraphQL within Apollo Server.
 
-RESTDataSource provides two levels of caching: an in-memory "request deduplication" feature primarily used to avoid sending the same GET (or HEAD) request multiple times in parallel, and an "HTTP cache" which provides browser-style caching in a (potentially shared) `KeyValueCache` which observes standard HTTP caching headers.
+RESTDataSource wraps an implementation of the DOM-style Fetch API such as `node-fetch` and adds the following features:
+- Two layers of caching:
+  + An in-memory "request deduplication" feature which by default avoids sending the same GET (or HEAD) request multiple times in parallel.
+  + An "HTTP cache" which provides browser-style caching in a (potentially shared) `KeyValueCache` which observes standard HTTP caching headers.
+- Convenience features such as the ability to specify an un-serialized object as a JSON request body and an easy way to specify URL search parameters
+- Error handling
 
 ## Documentation
 
-View the [Apollo Server documentation for RESTDataSource](https://www.apollographql.com/docs/apollo-server/data/fetching-rest) for more details.
+View the [Apollo Server documentation for RESTDataSource](https://www.apollographql.com/docs/apollo-server/data/fetching-rest) for more high-level details and examples.
 
 ## Usage
 
@@ -18,7 +23,7 @@ npm install @apollo/datasource-rest
 
 To define a data source, extend the [`RESTDataSource`](https://github.com/apollographql/datasource-rest/tree/main/src/RESTDataSource.ts) class and implement the data fetching methods that your resolvers require.  Data sources can then be provided via Apollo Server's `context` object during execution.
 
-Your implementation of these methods can call on convenience methods built into the [`RESTDataSource`](https://github.com/apollographql/datasource-rest/tree/main/src/RESTDataSource.ts) class to perform HTTP requests, while making it easy to build up query parameters, parse JSON results, and handle errors.
+Your implementation of these methods can call convenience methods built into the [`RESTDataSource`](https://github.com/apollographql/datasource-rest/tree/main/src/RESTDataSource.ts) class to perform HTTP requests, while making it easy to build up query parameters, parse JSON results, and handle errors.
 
 ```javascript
 const { RESTDataSource } = require('@apollo/datasource-rest');
@@ -43,11 +48,15 @@ class MoviesAPI extends RESTDataSource {
 ```
 
 ### API Reference
-To see the all the properties and functions that can be overridden, the [source code](https://github.com/apollographql/datasource-rest/tree/main/src/RESTDataSource.ts) is always the best option.
+
+`RESTDataSource` is designed to be subclassed in order to create an API for use by the rest of your server. Many of its methods are protected. These consist of HTTP fetching methods (`fetch`, `get`, `put`, `post`, `patch`, `delete`, and `head`) which your API can call, and other methods that can be overridden to customize behavior.
+
+This README lists all the protected methods. In practice, if you're looking to customize behavior by overriding methods, reading the [source code](https://github.com/apollographql/datasource-rest/tree/main/src/RESTDataSource.ts) is the best option.
 
 #### Properties
+
 ##### `baseURL`
-Optional value to use for all the REST calls. If it is set in your class implementation, this base URL is used as the prefix for all calls. If it is not set, then the value passed to the REST call is exactly the value used.
+Optional value to use for all the REST calls. If it is set in your class implementation, this base URL is used as the prefix for all calls. If it is not set, then the value passed to the REST call is exactly the value used. See also `resolveURL`.
 
 ```js title="baseURL.js"
 class MoviesAPI extends RESTDataSource {
@@ -71,8 +80,12 @@ In practice, this means that you should usually set `this.baseURL` to the common
 
 If a resource's path starts with something that looks like an URL because it contains a colon and you want it to be added on to the full base URL after its path (so you can't pass it as `this.get('/foo:bar')`), you can pass a path starting with `./`, like `this.get('./foo:bar')`.
 
+##### `httpCache`
 
-#### Methods
+This is an internal object that adds HTTP-header-sensitive caching to HTTP fetching. Its exact API is internal to this package and may change between versions.
+
+
+#### Overridable methods
 
 ##### `cacheKeyFor`
 By default, `RESTDatasource` uses the `cacheKey` option from the request as the cache key, or the request method and full request URL otherwise when saving information about the request to the `KeyValueCache`. Override this method to remove query parameters or compute a custom cache key.
@@ -141,11 +154,25 @@ class MoviesAPI extends RESTDataSource {
 ```
 
 ##### `willSendRequest`
-This method is invoked at the beginning of processing each request. It's called
-with the `path` and `request` provided to `fetch`, with a guaranteed non-empty
-`headers` and `params` objects. If a `Promise` is returned from this method it
-will wait until the promise is completed to continue executing the request. See
-the [intercepting fetches](#intercepting-fetches) section for usage examples.
+This method is invoked at the beginning of processing each request. It's called with the `path` and `request` provided to `fetch`, with a guaranteed non-empty `headers` and `params` objects. If a `Promise` is returned from this method it will wait until the promise is completed to continue executing the request. See the [intercepting fetches](#intercepting-fetches) section for usage examples.
+
+##### `resolveURL`
+
+In some cases, you'll want to set the URL based on the environment or other contextual values rather than simply resolving against `this.baseURL`. To do this, you can override `resolveURL`:
+
+```ts
+import type { KeyValueCache } from '@apollo/utils.keyvaluecache';
+
+class PersonalizationAPI extends RESTDataSource {
+  override async resolveURL(path: string, _request: AugmentedRequest) {
+    if (!this.baseURL) {
+      const addresses = await resolveSrv(path.split("/")[1] + ".service.consul");
+      this.baseURL = addresses[0];
+    }
+    return super.resolveURL(path);
+  }
+}
+```
 
 ##### `cacheOptionsFor`
 Allows setting the `CacheOptions` to be used for each request/response in the `HTTPCache`. This is separate from the request-only cache. You can use this to set the TTL to a value in seconds. If you return `{ttl: 0}`, the response will not be stored. If you return a positive number for `ttl` and the operation returns a 2xx status code, then the response *will* be cached, regardless of HTTP headers: make sure this is what you intended! (There is currently no way to say "only cache responses that should be cached according to HTTP headers, but change the TTL to something specific".) Note that if you do not specify `ttl` here, only `GET` requests are cached.
@@ -165,16 +192,42 @@ override cacheOptionsFor() {
 ##### `didEncounterError`
 By default, this method just throws the `error` it was given. If you override this method, you can choose to either perform some additional logic and still throw, or to swallow the error by not throwing the error result.
 
-#### `shouldJSONSerializeBody`
+##### `parseBody`
+
+This method is called with the HTTP response and should read the body and parse it into an appropriate format. By default, it checks to see if the `Content-Type` header starts with `application/json` or ends with `+json` (just looking at the header as a string without using a Content-Type parser) and returns `response.json()` if it does or `response.text()` if it does not. If you want to read the body in a different way, override this. This method should read the response fully; if it does not, it could cause a memory leak inside the HTTP cache. If you override this, you may want to override `cloneParsedBody` as well.
+
+##### `cloneParsedBody`
+
+This method is used to clone a body (for use by the request deduplication feature so that multiple callers get distinct return values that can be separately mutated). If your `parseBody` returns values other than basic JSON objects, you might want to override this method too. You can also change this method to return its argument without cloning if your code that uses this class is OK with the values returned from deduplicated requests sharing state.
+
+##### `shouldJSONSerializeBody`
+
 By default, this method returns `true` if the request body is:
 - a plain object or an array
 - an object with a `toJSON` method (which isn't a `Buffer` or an instance of a class named `FormData`)
 
 You can override this method in order to serialize other objects such as custom classes as JSON.
 
+##### `throwIfResponseIsError`
+
+After the body is parsed, this method checks a condition (by default, if the HTTP status is 4xx or 5xx) and throws an error created with `errorFromResponse` if the condition is met.
+
+##### `errorFromResponse`
+
+Creates an error based on the response.
+
+##### `catchCacheWritePromiseErrors`
+
+This class writes to the shared HTTP-header-sensitive cache in the background (ie, the write is not awaited as part of the HTTP fetch). It passes the `Promise` associated with that cache write to this method. By default, this method adds a `catch` handler to the `Promise` which writes any errors to `console.error`. You could use this to do different error handling, or to do no error handling if you trust all callers to use the `fetch` method and await `httpCache.cacheWritePromise`.
+
+##### `trace`
+
+This method wraps the entire processing of a single request; if the `NODE_ENV` environment variable is equal to `development`, it logs the request method, URL, and duration. You can override this to provide observability in a different manner.
+
+
 ### HTTP Methods
 
-The `get` method on the [`RESTDataSource`](https://github.com/apollographql/datasource-rest/tree/main/src/RESTDataSource.ts) makes an HTTP `GET` request. Similarly, there are methods built-in to allow for `POST`, `PUT`, `PATCH`, `DELETE`, and `HEAD` requests.
+The `get` method on the [`RESTDataSource`](https://github.com/apollographql/datasource-rest/tree/main/src/RESTDataSource.ts) makes an HTTP `GET` request and returns its parsed body. Similarly, there are methods built-in to allow for `POST`, `PUT`, `PATCH`, `DELETE`, and `HEAD` requests. (The `head` method returns the full `FetcherResponse` rather than the body because `HEAD` responses do not have bodies.)
 
 ```javascript
 class MoviesAPI extends RESTDataSource {
@@ -213,7 +266,9 @@ class MoviesAPI extends RESTDataSource {
 }
 ```
 
-All of the HTTP helper functions (`get`, `put`, `post`, `patch`, `delete`, and `head`) accept a second parameter for setting the `body`, `headers`, `params`, `cacheKey`, and `cacheOptions`.
+All of the HTTP helper functions (`get`, `put`, `post`, `patch`, `delete`, and `head`) accept a second parameter for setting the `body`, `headers`, `params`, `cacheKey`, and `cacheOptions` (and other Fetch API options).
+
+Alternatively, you can use the `fetch` method. The return value of this method is a `DataSourceFetchResult`, which contains `parsedBody`, `response`, and some other fields with metadata about how the operation interacted with the cache.
 
 ### Intercepting fetches
 
@@ -258,27 +313,10 @@ class PersonalizationAPI extends RESTDataSource {
 }
 ```
 
-### Resolving URLs dynamically
 
-In some cases, you'll want to set the URL based on the environment or other contextual values. To do this, you can override `resolveURL`:
+### Integration with Apollo Server
 
-```ts
-import type { KeyValueCache } from '@apollo/utils.keyvaluecache';
-
-class PersonalizationAPI extends RESTDataSource {
-  override async resolveURL(path: string, _request: AugmentedRequest) {
-    if (!this.baseURL) {
-      const addresses = await resolveSrv(path.split("/")[1] + ".service.consul");
-      this.baseURL = addresses[0];
-    }
-    return super.resolveURL(path);
-  }
-}
-```
-
-### Accessing data sources from resolvers
-
-To give resolvers access to data sources, you pass them as options to the `ApolloServer` constructor:
+To give resolvers access to data sources, you create and return them from your `context` function. (The following example uses the Apollo Server 4 API.)
 
 ```ts
 interface MyContext {
@@ -319,9 +357,3 @@ const resolvers = {
   },
 };
 ```
-
-### Implementing custom metrics
-
-By overriding `trace` method, it's possible to implement custom metrics for request timing.
-
-See the original method [implementation](https://github.com/apollographql/datasource-rest/tree/main/src/RESTDataSource.ts) or the reference.
