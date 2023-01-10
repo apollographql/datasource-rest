@@ -23,35 +23,6 @@ At a higher level, the most notable changes include:
 
 ### Major Changes
 
-- [#89](https://github.com/apollographql/datasource-rest/pull/89) [`4a249ec`](https://github.com/apollographql/datasource-rest/commit/4a249ec48e7d32a564ff7805af4435d76dc9cab1) Thanks [@trevor-scheer](https://github.com/trevor-scheer)! - This change restores the full functionality of `willSendRequest` which
-  previously existed in the v3 version of this package. The v4 change introduced a
-  regression where the incoming request's `body` was no longer included in the
-  object passed to the `willSendRequest` hook, it was always `undefined`.
-
-  For consistency and typings reasons, the `path` argument is now the first
-  argument to the `willSendRequest` hook, followed by the `AugmentedRequest`
-  request object.
-
-- [#115](https://github.com/apollographql/datasource-rest/pull/115) [`be4371f`](https://github.com/apollographql/datasource-rest/commit/be4371f5f5582f980f55c3cfac4d8bc58dce8242) Thanks [@glasser](https://github.com/glasser)! - The `errorFromResponse` method now receives an options object with `url`, `request`, `response`, and `parsedBody` rather than just a response, and the body has already been parsed.
-
-- [#110](https://github.com/apollographql/datasource-rest/pull/110) [`ea43a27`](https://github.com/apollographql/datasource-rest/commit/ea43a272f1aeaa511d57d4a84290c64d2b63785c) Thanks [@trevor-scheer](https://github.com/trevor-scheer)! - Update default `cacheKeyFor` to include method
-
-  In its previous form, `cacheKeyFor` only used the URL to calculate the cache key. As a result, when `cacheOptions.ttl` was specified, the method was ignored. This could lead to surprising behavior where a POST request's response was cached and returned for a GET request (for example).
-
-  The default `cacheKeyFor` now includes the request method, meaning there will now be distinct cache entries for a given URL per method.
-
-- [#88](https://github.com/apollographql/datasource-rest/pull/88) [`2c3dbd0`](https://github.com/apollographql/datasource-rest/commit/2c3dbd0cb0d6de7b414a6f73718541280903d093) Thanks [@glasser](https://github.com/glasser)! - When passing `params` as an object, parameters with `undefined` values are now skipped, like with `JSON.stringify`. So you can write:
-
-  ```ts
-  getUser(query: string | undefined) {
-    return this.get('user', { params: { query } });
-  }
-  ```
-
-  and if `query` is not provided, the `query` parameter will be left off of the URL instead of given the value `undefined`.
-
-  As part of this change, we've removed the ability to provide `params` in formats other than this kind of object or as an `URLSearchParams` object. Previously, we allowed every form of input that could be passed to `new URLSearchParams()`. If you were using one of the other forms (like a pre-serialized URL string or an array of two-element arrays), just pass it directly to `new URLSearchParams`; note that the feature of stripping `undefined` values will not occur in this case. For example, you can replace `this.get('user', { params: [['query', query]] })` with `this.get('user', { params: new URLSearchParams([['query', query]]) })`. (`URLSearchParams` is available in Node as a global.)
-
 - [#100](https://github.com/apollographql/datasource-rest/pull/100) [`2e51657`](https://github.com/apollographql/datasource-rest/commit/2e51657b4f7d646f82f8e03039c339f59a5260af) Thanks [@glasser](https://github.com/glasser)! - Instead of memoizing GET requests forever in memory, only apply de-duplication during the lifetime of the original request. Replace the `memoizeGetRequests` field with a `requestDeduplicationPolicyFor()` method to determine how de-duplication works per request.
 
   To restore the surprising infinite-unconditional-cache behavior of previous versions, use this implementation of `requestDeduplicationPolicyFor()` (which replaces `deduplicate-during-request-lifetime` with `deduplicate-until-invalidated`):
@@ -83,6 +54,35 @@ At a higher level, the most notable changes include:
     return { policy: 'do-not-deduplicate' } as const;
   }
   ```
+
+- [#89](https://github.com/apollographql/datasource-rest/pull/89) [`4a249ec`](https://github.com/apollographql/datasource-rest/commit/4a249ec48e7d32a564ff7805af4435d76dc9cab1) Thanks [@trevor-scheer](https://github.com/trevor-scheer)! - This change restores the full functionality of `willSendRequest` which
+  previously existed in the v3 version of this package. The v4 change introduced a
+  regression where the incoming request's `body` was no longer included in the
+  object passed to the `willSendRequest` hook, it was always `undefined`.
+
+  For consistency and typings reasons, the `path` argument is now the first
+  argument to the `willSendRequest` hook, followed by the `AugmentedRequest`
+  request object.
+
+- [#115](https://github.com/apollographql/datasource-rest/pull/115) [`be4371f`](https://github.com/apollographql/datasource-rest/commit/be4371f5f5582f980f55c3cfac4d8bc58dce8242) Thanks [@glasser](https://github.com/glasser)! - The `errorFromResponse` method now receives an options object with `url`, `request`, `response`, and `parsedBody` rather than just a response, and the body has already been parsed.
+
+- [#110](https://github.com/apollographql/datasource-rest/pull/110) [`ea43a27`](https://github.com/apollographql/datasource-rest/commit/ea43a272f1aeaa511d57d4a84290c64d2b63785c) Thanks [@trevor-scheer](https://github.com/trevor-scheer)! - Update default `cacheKeyFor` to include method
+
+  In its previous form, `cacheKeyFor` only used the URL to calculate the cache key. As a result, when `cacheOptions.ttl` was specified, the method was ignored. This could lead to surprising behavior where a POST request's response was cached and returned for a GET request (for example).
+
+  The default `cacheKeyFor` now includes the request method, meaning there will now be distinct cache entries for a given URL per method.
+
+- [#88](https://github.com/apollographql/datasource-rest/pull/88) [`2c3dbd0`](https://github.com/apollographql/datasource-rest/commit/2c3dbd0cb0d6de7b414a6f73718541280903d093) Thanks [@glasser](https://github.com/glasser)! - When passing `params` as an object, parameters with `undefined` values are now skipped, like with `JSON.stringify`. So you can write:
+
+  ```ts
+  getUser(query: string | undefined) {
+    return this.get('user', { params: { query } });
+  }
+  ```
+
+  and if `query` is not provided, the `query` parameter will be left off of the URL instead of given the value `undefined`.
+
+  As part of this change, we've removed the ability to provide `params` in formats other than this kind of object or as an `URLSearchParams` object. Previously, we allowed every form of input that could be passed to `new URLSearchParams()`. If you were using one of the other forms (like a pre-serialized URL string or an array of two-element arrays), just pass it directly to `new URLSearchParams`; note that the feature of stripping `undefined` values will not occur in this case. For example, you can replace `this.get('user', { params: [['query', query]] })` with `this.get('user', { params: new URLSearchParams([['query', query]]) })`. (`URLSearchParams` is available in Node as a global.)
 
 - [#107](https://github.com/apollographql/datasource-rest/pull/107) [`4b2a6f9`](https://github.com/apollographql/datasource-rest/commit/4b2a6f94eb905a08669e23d0a37f2a52d6ea055c) Thanks [@trevor-scheer](https://github.com/trevor-scheer)! - Remove `didReceiveResponse` hook
 
