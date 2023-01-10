@@ -11,10 +11,10 @@ The entries below enumerate all of the changes in v5 in detail along with their 
 At a higher level, the most notable changes include:
 
 #### Breaking
-* Remove magic around parallel request deduplication behavior and provided a hook to configure its behavior
-* Cache keys now include the request method by default (no more overlap in GET and POST requests)
-* Remove the semantically confusing `didReceiveResponse` hook
-* Paths now behave as links would in a web browser, allowing path segments to contain colons
+* Remove magic around request deduplication behavior and provide a hook to configure its behavior. Previously, requests were deduplicated forever by default. Now, only requests happening concurrently will be deduplicated (and subsequently cleared from the in-memory cache).
+* Cache keys now include the request method by default (no more overlap in GET and POST requests).
+* Remove the semantically confusing `didReceiveResponse` hook.
+* Paths now behave as links would in a web browser, allowing path segments to contain colons.
 
 #### Additive
 * Introduce a public `fetch` method, giving access to the full `Response` object
