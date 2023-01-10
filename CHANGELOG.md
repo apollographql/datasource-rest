@@ -2,6 +2,25 @@
 
 ## 5.0.0
 
+Version 5 of `RESTDataSource` addresses many of the long-standing issues and PRs that have existed in this repository (and its former location in the `apollo-server` repository). While this version does include a number of breaking changes, our hope is that the updated API makes this package more usable and its caching-related behavior less surprising.
+
+The entries below enumerate all of the changes in v5 in detail along with their associated PRs. If you are migrating from v3 or v4, we recommend at least skimming the entries below to see if you're affected by the breaking changes. As always, we recommend using TypeScript with our libraries. This will be especially helpful in surfacing changes to the API which affect your usage. Even if you don't use TypeScript, you can still benefit from the typings we provide using various convenience tools like `// @ts-check` (with compatible editors like VS Code).
+
+### TL;DR
+
+At a higher level, the most notable changes include:
+
+#### Breaking
+* Remove magic around parallel request deduplication behavior and provided a hook to configure its behavior
+* Cache keys now include the request method by default (no more overlap in GET and POST requests)
+* Remove the semantically confusing `didReceiveResponse` hook
+* Paths now behave as links would in a web browser, allowing path segments to contain colons
+
+#### Additive
+* Introduce a public `fetch` method, giving access to the full `Response` object
+* Improve ETag header semantics (correctly handle `Last-Modified` header)
+* Introduce a public `head` class method for issuing `HEAD` requests
+
 ### Major Changes
 
 - [#89](https://github.com/apollographql/datasource-rest/pull/89) [`4a249ec`](https://github.com/apollographql/datasource-rest/commit/4a249ec48e7d32a564ff7805af4435d76dc9cab1) Thanks [@trevor-scheer](https://github.com/trevor-scheer)! - This change restores the full functionality of `willSendRequest` which
@@ -24,14 +43,14 @@
 - [#88](https://github.com/apollographql/datasource-rest/pull/88) [`2c3dbd0`](https://github.com/apollographql/datasource-rest/commit/2c3dbd0cb0d6de7b414a6f73718541280903d093) Thanks [@glasser](https://github.com/glasser)! - When passing `params` as an object, parameters with `undefined` values are now skipped, like with `JSON.stringify`. So you can write:
 
   ```ts
-  getPost(query: string | undefined) {
-    return this.get('post', { params: { query } });
+  getUser(query: string | undefined) {
+    return this.get('user', { params: { query } });
   }
   ```
 
   and if `query` is not provided, the `query` parameter will be left off of the URL instead of given the value `undefined`.
 
-  As part of this change, we've removed the ability to provide `params` in formats other than this kind of object or as an `URLSearchParams` object. Previously, we allowed every form of input that could be passed to `new URLSearchParams()`. If you were using one of the other forms (like a pre-serialized URL string or an array of two-element arrays), just pass it directly to `new URLSearchParams`; note that the feature of stripping `undefined` values will not occur in this case. For example, you can replace `this.get('post', { params: [['query', query]] })` with `this.get('post', { params: new URLSearchParams([['query', query]]) })`. (`URLSearchParams` is available in Node as a global.)
+  As part of this change, we've removed the ability to provide `params` in formats other than this kind of object or as an `URLSearchParams` object. Previously, we allowed every form of input that could be passed to `new URLSearchParams()`. If you were using one of the other forms (like a pre-serialized URL string or an array of two-element arrays), just pass it directly to `new URLSearchParams`; note that the feature of stripping `undefined` values will not occur in this case. For example, you can replace `this.get('user', { params: [['query', query]] })` with `this.get('user', { params: new URLSearchParams([['query', query]]) })`. (`URLSearchParams` is available in Node as a global.)
 
 - [#100](https://github.com/apollographql/datasource-rest/pull/100) [`2e51657`](https://github.com/apollographql/datasource-rest/commit/2e51657b4f7d646f82f8e03039c339f59a5260af) Thanks [@glasser](https://github.com/glasser)! - Instead of memoizing GET requests forever in memory, only apply de-duplication during the lifetime of the original request. Replace the `memoizeGetRequests` field with a `requestDeduplicationPolicyFor()` method to determine how de-duplication works per request.
 
