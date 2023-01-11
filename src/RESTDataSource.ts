@@ -67,7 +67,7 @@ export interface RequestWithBody extends Omit<RequestOptions, 'body'> {
   body?: FetcherRequestInit['body'] | object;
 }
 
-type DataSourceRequest = RequestWithoutBody | RequestWithBody;
+export type DataSourceRequest = RequestWithoutBody | RequestWithBody;
 
 // While tempting, this union can't be reduced / factored out to just
 // Omit<WithRequired<RequestWithBody | RequestWithBody, 'headers'>, 'params'> & { params: URLSearchParams }
