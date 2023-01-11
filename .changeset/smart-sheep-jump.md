@@ -2,4 +2,5 @@
 '@apollo/datasource-rest': patch
 ---
 
-Export `DataSourceRequest` type
+Create intermediate request types (`PostRequest`, etc.) for consistency and export them.
+Export `DataSourceRequest`, `DataSourceConfig`, and `DataSourceFetchResult` types.

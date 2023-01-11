@@ -60,12 +60,33 @@ export interface GetRequest extends RequestOptions {
   body?: never;
 }
 
-export type RequestWithoutBody = HeadRequest | GetRequest;
-
-export interface RequestWithBody extends Omit<RequestOptions, 'body'> {
-  method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+interface WithBody extends Omit<RequestOptions, 'body'> {
   body?: FetcherRequestInit['body'] | object;
 }
+
+export interface PostRequest extends WithBody {
+  method: 'POST';
+}
+
+export interface PutRequest extends WithBody {
+  method: 'PUT';
+}
+
+export interface PatchRequest extends WithBody {
+  method: 'PATCH';
+}
+
+export interface DeleteRequest extends WithBody {
+  method: 'DELETE';
+}
+
+export type RequestWithoutBody = HeadRequest | GetRequest;
+
+export type RequestWithBody =
+  | PostRequest
+  | PutRequest
+  | PatchRequest
+  | DeleteRequest;
 
 export type DataSourceRequest = RequestWithoutBody | RequestWithBody;
 
