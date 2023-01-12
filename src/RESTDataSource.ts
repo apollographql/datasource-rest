@@ -60,14 +60,35 @@ export interface GetRequest extends RequestOptions {
   body?: never;
 }
 
-export type RequestWithoutBody = HeadRequest | GetRequest;
-
-export interface RequestWithBody extends Omit<RequestOptions, 'body'> {
-  method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+interface WithBody extends Omit<RequestOptions, 'body'> {
   body?: FetcherRequestInit['body'] | object;
 }
 
-type DataSourceRequest = RequestWithoutBody | RequestWithBody;
+export interface PostRequest extends WithBody {
+  method?: 'POST';
+}
+
+export interface PutRequest extends WithBody {
+  method?: 'PUT';
+}
+
+export interface PatchRequest extends WithBody {
+  method?: 'PATCH';
+}
+
+export interface DeleteRequest extends WithBody {
+  method?: 'DELETE';
+}
+
+export type RequestWithoutBody = HeadRequest | GetRequest;
+
+export type RequestWithBody =
+  | PostRequest
+  | PutRequest
+  | PatchRequest
+  | DeleteRequest;
+
+export type DataSourceRequest = RequestWithoutBody | RequestWithBody;
 
 // While tempting, this union can't be reduced / factored out to just
 // Omit<WithRequired<RequestWithBody | RequestWithBody, 'headers'>, 'params'> & { params: URLSearchParams }
@@ -366,7 +387,7 @@ export abstract class RESTDataSource {
 
   protected async post<TResult = any>(
     path: string,
-    request?: RequestWithBody,
+    request?: PostRequest,
   ): Promise<TResult> {
     return (
       await this.fetch<TResult>(path, {
@@ -378,7 +399,7 @@ export abstract class RESTDataSource {
 
   protected async patch<TResult = any>(
     path: string,
-    request?: RequestWithBody,
+    request?: PatchRequest,
   ): Promise<TResult> {
     return (
       await this.fetch<TResult>(path, {
@@ -390,7 +411,7 @@ export abstract class RESTDataSource {
 
   protected async put<TResult = any>(
     path: string,
-    request?: RequestWithBody,
+    request?: PutRequest,
   ): Promise<TResult> {
     return (
       await this.fetch<TResult>(path, {
@@ -402,7 +423,7 @@ export abstract class RESTDataSource {
 
   protected async delete<TResult = any>(
     path: string,
-    request?: RequestWithBody,
+    request?: DeleteRequest,
   ): Promise<TResult> {
     return (
       await this.fetch<TResult>(path, {
