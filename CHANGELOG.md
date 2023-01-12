@@ -1,5 +1,12 @@
 # @apollo/datasource-rest
 
+## 5.0.1
+
+### Patch Changes
+
+- [#137](https://github.com/apollographql/datasource-rest/pull/137) [`c9ffa7f`](https://github.com/apollographql/datasource-rest/commit/c9ffa7f0de166f619eeed151d7a9b129aa917d59) Thanks [@trevor-scheer](https://github.com/trevor-scheer)! - Create intermediate request types (`PostRequest`, etc.) for consistency and export them.
+  Export `DataSourceRequest`, `DataSourceConfig`, and `DataSourceFetchResult` types.
+
 ## 5.0.0
 
 Version 5 of `RESTDataSource` addresses many of the long-standing issues and PRs that have existed in this repository (and its former location in the `apollo-server` repository). While this version does include a number of breaking changes, our hope is that the updated API makes this package more usable and its caching-related behavior less surprising.
@@ -11,15 +18,17 @@ The entries below enumerate all of the changes in v5 in detail along with their 
 At a higher level, the most notable changes include:
 
 #### Breaking
-* Remove magic around request deduplication behavior and provide a hook to configure its behavior. Previously, requests were deduplicated forever by default. Now, only requests happening concurrently will be deduplicated (and subsequently cleared from the in-memory cache).
-* Cache keys now include the request method by default (no more overlap in GET and POST requests).
-* Remove the semantically confusing `didReceiveResponse` hook.
-* Paths now behave as links would in a web browser, allowing path segments to contain colons.
+
+- Remove magic around request deduplication behavior and provide a hook to configure its behavior. Previously, requests were deduplicated forever by default. Now, only requests happening concurrently will be deduplicated (and subsequently cleared from the in-memory cache).
+- Cache keys now include the request method by default (no more overlap in GET and POST requests).
+- Remove the semantically confusing `didReceiveResponse` hook.
+- Paths now behave as links would in a web browser, allowing path segments to contain colons.
 
 #### Additive
-* Introduce a public `fetch` method, giving access to the full `Response` object
-* Improve ETag header semantics (correctly handle `Last-Modified` header)
-* Introduce a public `head` class method for issuing `HEAD` requests
+
+- Introduce a public `fetch` method, giving access to the full `Response` object
+- Improve ETag header semantics (correctly handle `Last-Modified` header)
+- Introduce a public `head` class method for issuing `HEAD` requests
 
 ### Major Changes
 
