@@ -272,24 +272,22 @@ Alternatively, you can use the `fetch` method. The return value of this method i
 
 ### Intercepting fetches
 
-Data sources allow you to intercept fetches to set headers, query parameters, or make other changes to the outgoing request. This is most often used for authorization or other common concerns that apply to all requests. Data sources also get access to the GraphQL context, which is a great place to store a user token or other information you need to have available.
+Data sources allow you to intercept fetches to set headers, query parameters, or make other changes to the outgoing request. This is most often used for authorization or other common concerns that apply to all requests. The `constructor` can be overridden to require additional contextual information when the class is instantiated like so:
 
-You can easily set a header on every request:
-
-```javascript
+```ts
 class PersonalizationAPI extends RESTDataSource {
-  willSendRequest(path, request) {
-    request.headers['authorization'] = this.context.token;
+  private token: string;
+
+  constructor(token: string) {
+    super();
+    this.token = token;
   }
-}
-```
 
-Or add a query parameter:
-
-```javascript
-class PersonalizationAPI extends RESTDataSource {
   willSendRequest(path, request) {
-    request.params.set('api_key', this.context.token);
+    // set an authorization header
+    request.headers['authorization'] = this.token;
+    // or set a query parameter
+    request.params.set('api_key', this.token);
   }
 }
 ```
@@ -302,9 +300,9 @@ class PersonalizationAPI extends RESTDataSource {
   override baseURL = 'https://personalization-api.example.com/';
 
   private token: string;
-  constructor(options: { cache: KeyValueCache; token: string}) {
-    super(options);
-    this.token = options.token;
+  constructor(token: string) {
+    super();
+    this.token = token;
   }
 
   override willSendRequest(_path: string, request: AugmentedRequest) {
