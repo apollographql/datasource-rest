@@ -110,6 +110,29 @@ At a higher level, the most notable changes include:
   functionality that the author of this hook had originally intended in a more
   direct manner.
 
+  You reasonably may have used this hook for things like observability and logging,
+  updating response headers, or mutating the response object in some other way. If
+  so, you can now override the public `fetch` method like so:
+  
+  ```ts
+  class MyDataSource extends RESTDataSource {
+    override async fetch<TResult>(
+      path: string,
+      incomingRequest: DataSourceRequest = {}
+    ) {
+      return super
+        .fetch<TResult>(path, incomingRequest)
+        .then(({ parsedBody, response }) => {
+          // log or update your response object here
+          return { parsedBody, response };
+        });
+    }
+  }
+  ```
+
+  All of the convenience http methods (`get()`, `post()`, etc.) call this `fetch` function, so
+  changes here will apply to every request that your datasource makes.
+
 - [#95](https://github.com/apollographql/datasource-rest/pull/95) [`c59b82f`](https://github.com/apollographql/datasource-rest/commit/c59b82fd7bfd90cac59fe10d65b3aa23658354c1) Thanks [@glasser](https://github.com/glasser)! - Simplify interpretation of `this.baseURL` so it works exactly like links in a web browser.
 
   If you set `this.baseURL` to an URL with a non-empty path component, this may change the URL that your methods talk to. Specifically:
