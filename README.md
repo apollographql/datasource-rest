@@ -311,6 +311,29 @@ class PersonalizationAPI extends RESTDataSource {
 }
 ```
 
+### Processing Responses
+
+> Looking for `didReceiveResponse`? This section is probably interesting to you.
+
+You might need to read or mutate the response before it's returned. For example, you might need to log a particular header for each request. To do this, you can override the public `fetch` method like so:
+
+```ts
+  class MyDataSource extends RESTDataSource {
+    override async fetch<TResult>(
+      path: string,
+      incomingRequest: DataSourceRequest = {}
+    ) {
+      const result = await super.fetch(path, incomingRequest);
+      const header = result.response.headers.get('my-custom-header');
+      if (header) {
+        console.log(`Found header: ${header}`);
+      }
+      return result;
+    }
+  }
+```
+
+This example leverages the default `fetch` implementation from the parent (`super`). We append our step to the promise chain, read the header, and return the original result that the `super.fetch` promise resolved to (`{ parsedBody, response }`).
 
 ### Integration with Apollo Server
 
