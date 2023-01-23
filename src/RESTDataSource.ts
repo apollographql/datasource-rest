@@ -257,9 +257,7 @@ export abstract class RESTDataSource {
     request: FetcherRequestInit,
   ): ValueOrPromise<CacheOptions | undefined>;
 
-  protected didEncounterError(error: Error, _request: RequestOptions) {
-    throw error;
-  }
+  protected didEncounterError?(error: Error, _request: RequestOptions): void;
 
   // Reads the body of the response and returns it in parsed form. If you want
   // to process data in some other way (eg, reading binary data), override this
@@ -531,7 +529,7 @@ export abstract class RESTDataSource {
             },
           };
         } catch (error) {
-          this.didEncounterError(error as Error, outgoingRequest);
+          this.didEncounterError?.(error as Error, outgoingRequest);
           throw error;
         }
       });
