@@ -193,7 +193,9 @@ override cacheOptionsFor() {
 
 > Note: In previous versions of RESTDataSource (< v5), this hook was expected to throw the error it received (the default implementation did exactly that). This is no longer required; as mentioned below, the error will be thrown immediately after invoking `didEncounterError`.
 
-You can implement this observability hook in order to inspect (or modify) errors that are thrown while fetching, parsing the body (`parseBody()`), or by the `throwIfResponseIsError()` hook. The error that this hook receives will be thrown immediately after this hook is invoked.
+You can implement this hook in order to inspect (or modify) errors that are thrown while fetching, parsing the body (`parseBody()`), or by the `throwIfResponseIsError()` hook. The error that this hook receives will be thrown immediately after this hook is invoked.
+
+You can also throw a different error here altogether. Note that by default, errors are `GraphQLError`s (coming from `errorFromResponse`).
 
 ##### `parseBody`
 
