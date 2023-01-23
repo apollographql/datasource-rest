@@ -1905,16 +1905,16 @@ describe('RESTDataSource', () => {
           let encounteredError: Error | null = null;
           const dataSource = new (class extends RESTDataSource {
             override baseURL = 'https://api.example.com';
-  
+
             getFoo() {
               return this.get('foo');
             }
-  
+
             override didEncounterError(error: Error) {
               encounteredError = error;
             }
           })();
-  
+
           nock(apiUrl)
             .get('/foo')
             .reply(
@@ -1924,7 +1924,7 @@ describe('RESTDataSource', () => {
               },
               { 'content-type': 'application/json' },
             );
-  
+
           const result = dataSource.getFoo();
           await expect(result).rejects.toThrow(GraphQLError);
           await expect(result).rejects.toMatchObject({
@@ -1945,20 +1945,20 @@ describe('RESTDataSource', () => {
             message: '500: Internal Server Error',
           });
         });
-  
+
         it('can modify the error', async () => {
           const dataSource = new (class extends RESTDataSource {
             override baseURL = 'https://api.example.com';
-  
+
             getFoo() {
               return this.get('foo');
             }
-  
+
             override didEncounterError(error: Error) {
               error.message = 'Hello from didEncounterError';
             }
           })();
-  
+
           nock(apiUrl)
             .get('/foo')
             .reply(
@@ -1968,15 +1968,15 @@ describe('RESTDataSource', () => {
               },
               { 'content-type': 'application/json' },
             );
-  
+
           const result = dataSource.getFoo();
-  
+
           await expect(result).rejects.toThrow(GraphQLError);
           await expect(result).rejects.toMatchObject({
             message: 'Hello from didEncounterError',
           });
         });
-  
+
         it('can throw its own error', async () => {
           const dataSource = new (class extends RESTDataSource {
             override baseURL = 'https://api.example.com';
@@ -2008,7 +2008,7 @@ describe('RESTDataSource', () => {
             message: 'I replaced the error entirely',
           });
         });
-      })
+      });
     });
   });
 });
