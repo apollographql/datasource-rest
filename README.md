@@ -325,15 +325,12 @@ You might need to read or mutate the response before it's returned. For example,
       path: string,
       incomingRequest: DataSourceRequest = {}
     ) {
-      return super
-        .fetch<TResult>(path, incomingRequest)
-        .then(({ parsedBody, response }) => {
-          const header = response.headers.get('my-custom-header');
-          if (header) {
-            console.log(`Found header: ${header}`);
-          }
-          return { parsedBody, response };
-        });
+      const result = await super.fetch(path, incomingRequest);
+      const header = result.response.headers.get('my-custom-header');
+      if (header) {
+        console.log(`Found header: ${header}`);
+      }
+      return result;
     }
   }
 ```

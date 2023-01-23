@@ -120,12 +120,10 @@ At a higher level, the most notable changes include:
       path: string,
       incomingRequest: DataSourceRequest = {}
     ) {
-      return super
-        .fetch<TResult>(path, incomingRequest)
-        .then(({ parsedBody, response }) => {
-          // log or update your response object here
-          return { parsedBody, response };
-        });
+      const result = await super.fetch(path, incomingRequest);
+      // Log or update here; you have access to `result.parsedBody` and `result.response`.
+      // Return the `result` object when you're finished.
+      return result;
     }
   }
   ```
