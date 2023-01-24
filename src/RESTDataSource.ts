@@ -257,7 +257,12 @@ export abstract class RESTDataSource {
     request: FetcherRequestInit,
   ): ValueOrPromise<CacheOptions | undefined>;
 
-  protected didEncounterError?(error: Error, _request: RequestOptions): void;
+  protected didEncounterError(_error: Error, _request: RequestOptions) {
+    // left as a no-op instead of an unimplemented optional method to avoid
+    // breaking an existing use case where one calls
+    // `super.didEncounterErrors(...)` This could be unimplemented / undefined
+    // in a theoretical next major of this package.
+  }
 
   // Reads the body of the response and returns it in parsed form. If you want
   // to process data in some other way (eg, reading binary data), override this
