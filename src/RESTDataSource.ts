@@ -534,7 +534,7 @@ export abstract class RESTDataSource {
             },
           };
         } catch (error) {
-          this.didEncounterError?.(error as Error, outgoingRequest);
+          this.didEncounterError(error as Error, outgoingRequest);
           throw error;
         }
       });
