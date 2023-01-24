@@ -190,7 +190,12 @@ override cacheOptionsFor() {
 ```
 
 ##### `didEncounterError`
-By default, this method just throws the `error` it was given. If you override this method, you can choose to either perform some additional logic and still throw, or to swallow the error by not throwing the error result.
+
+> Note: In previous versions of RESTDataSource (< v5), this hook was expected to throw the error it received (the default implementation did exactly that). This is no longer required; as mentioned below, the error will be thrown immediately after invoking `didEncounterError`.
+
+You can implement this hook in order to inspect (or modify) errors that are thrown while fetching, parsing the body (`parseBody()`), or by the `throwIfResponseIsError()` hook. The error that this hook receives will be thrown immediately after this hook is invoked.
+
+You can also throw a different error here altogether. Note that by default, errors are `GraphQLError`s (coming from `errorFromResponse`).
 
 ##### `parseBody`
 

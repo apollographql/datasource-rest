@@ -1899,6 +1899,116 @@ describe('RESTDataSource', () => {
           expect(calls).toBe(1);
         });
       });
+
+      describe('didEncounterError', () => {
+        it('is called with the error', async () => {
+          let encounteredError: Error | null = null;
+          const dataSource = new (class extends RESTDataSource {
+            override baseURL = 'https://api.example.com';
+
+            getFoo() {
+              return this.get('foo');
+            }
+
+            override didEncounterError(error: Error) {
+              encounteredError = error;
+            }
+          })();
+
+          nock(apiUrl)
+            .get('/foo')
+            .reply(
+              500,
+              {
+                errors: [{ message: 'Houston, we have a problem.' }],
+              },
+              { 'content-type': 'application/json' },
+            );
+
+          const result = dataSource.getFoo();
+          await expect(result).rejects.toThrow(GraphQLError);
+          await expect(result).rejects.toMatchObject({
+            extensions: {
+              response: {
+                status: 500,
+                body: {
+                  errors: [
+                    {
+                      message: 'Houston, we have a problem.',
+                    },
+                  ],
+                },
+              },
+            },
+          });
+          expect(encounteredError).toMatchObject({
+            message: '500: Internal Server Error',
+          });
+        });
+
+        it('can modify the error', async () => {
+          const dataSource = new (class extends RESTDataSource {
+            override baseURL = 'https://api.example.com';
+
+            getFoo() {
+              return this.get('foo');
+            }
+
+            override didEncounterError(error: Error) {
+              error.message = 'Hello from didEncounterError';
+            }
+          })();
+
+          nock(apiUrl)
+            .get('/foo')
+            .reply(
+              500,
+              {
+                errors: [{ message: 'Houston, we have a problem.' }],
+              },
+              { 'content-type': 'application/json' },
+            );
+
+          const result = dataSource.getFoo();
+
+          await expect(result).rejects.toThrow(GraphQLError);
+          await expect(result).rejects.toMatchObject({
+            message: 'Hello from didEncounterError',
+          });
+        });
+
+        it('can throw its own error', async () => {
+          const dataSource = new (class extends RESTDataSource {
+            override baseURL = 'https://api.example.com';
+
+            getFoo() {
+              return this.get('foo');
+            }
+
+            override didEncounterError() {
+              throw new Error('I replaced the error entirely');
+            }
+          })();
+
+          nock(apiUrl)
+            .get('/foo')
+            .reply(
+              500,
+              {
+                errors: [{ message: 'Houston, we have a problem.' }],
+              },
+              { 'content-type': 'application/json' },
+            );
+
+          const result = dataSource.getFoo();
+
+          await expect(result).rejects.not.toThrow(GraphQLError);
+          await expect(result).rejects.toThrow(Error);
+          await expect(result).rejects.toMatchObject({
+            message: 'I replaced the error entirely',
+          });
+        });
+      });
     });
   });
 });
