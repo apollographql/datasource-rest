@@ -483,6 +483,10 @@ export abstract class RESTDataSource {
       // If Content-Type header has not been previously set, set to application/json
       if (!augmentedRequest.headers) {
         augmentedRequest.headers = { 'content-type': 'application/json' };
+      // replace capitalized content-type header with lower case, ensures no dupliate content-types
+      } else if (augmentedRequest.headers['Content-Type']) {
+        augmentedRequest.headers['content-type'] = augmentedRequest.headers['Content-Type'];
+        delete augmentedRequest.headers['Content-Type'];
       } else if (!augmentedRequest.headers['content-type']) {
         augmentedRequest.headers['content-type'] = 'application/json';
       }
