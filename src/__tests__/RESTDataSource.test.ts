@@ -360,7 +360,7 @@ describe('RESTDataSource', () => {
 
     it('adds an `application/json` content header when no headers are passed in', async () => {
       const requestOptions = {
-        body:  {foo: 'bar' },
+        body: { foo: 'bar' },
       };
       const dataSource = new (class extends RESTDataSource {
         override baseURL = 'https://api.example.com';
