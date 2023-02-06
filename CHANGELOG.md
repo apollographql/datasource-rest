@@ -1,5 +1,41 @@
 # @apollo/datasource-rest
 
+## 5.0.2
+
+### Patch Changes
+
+- [#159](https://github.com/apollographql/datasource-rest/pull/159) [`ee018a7`](https://github.com/apollographql/datasource-rest/commit/ee018a7744a8c6ea7f312eec33f1b99c4ae964d9) Thanks [@trevor-scheer](https://github.com/trevor-scheer)! - Update `http-cache-semantics` package to latest patch, resolving a security
+  issue.
+
+  Unlike many security updates Apollo repos receive, this is an _actual_ (non-dev)
+  dependency of this package which means it is actually a user-facing security
+  issue.
+
+  The potential impact of this issue is limited to a DOS attack (via an
+  inefficient regex).
+
+  This security issue would only affect you if either:
+
+  - you pass untrusted (i.e. from your users) `cache-control` request headers
+  - you sending requests to untrusted REST server that might return malicious
+    `cache-control` headers
+
+  Since `http-cache-semantics` is a careted (^) dependency in this package, the
+  security issue can (and might already) be resolved via a `package-lock.json`
+  update within your project (possibly triggered by `npm audit` or another
+  dependency update which has already updated its version of the package in
+  question). If `npm ls http-cache-semantics` reveals a tree of dependencies which
+  only include the `4.1.1` version (and no references to any previous versions)
+  then you are currently unaffected and this patch should have (for all intents
+  and purpose) no effect.
+
+  More details available here: https://github.com/advisories/GHSA-rc47-6667-2j5j
+
+- [#160](https://github.com/apollographql/datasource-rest/pull/160) [`786c44f`](https://github.com/apollographql/datasource-rest/commit/786c44f9fbb5aef43962fc39bb74baa870fdb8ec) Thanks [@trevor-scheer](https://github.com/trevor-scheer)! - Add missing `@apollo/utils.withrequired` type dependency which is part of the
+  public typings (via the `AugmentedRequest` type).
+
+- [#154](https://github.com/apollographql/datasource-rest/pull/154) [`bb0cff0`](https://github.com/apollographql/datasource-rest/commit/bb0cff0e1cb9e8adb13587fc9d99ea573be4cc32) Thanks [@JustinSomers](https://github.com/JustinSomers)! - Addresses duplicate content-type header bug due to upper-cased headers being forwarded. This change instead maps all headers to lowercased headers.
+
 ## 5.0.1
 
 ### Patch Changes
@@ -113,12 +149,12 @@ At a higher level, the most notable changes include:
   You reasonably may have used this hook for things like observability and logging,
   updating response headers, or mutating the response object in some other way. If
   so, you can now override the public `fetch` method like so:
-  
+
   ```ts
   class MyDataSource extends RESTDataSource {
     override async fetch<TResult>(
       path: string,
-      incomingRequest: DataSourceRequest = {}
+      incomingRequest: DataSourceRequest = {},
     ) {
       const result = await super.fetch(path, incomingRequest);
       // Log or update here; you have access to `result.parsedBody` and `result.response`.

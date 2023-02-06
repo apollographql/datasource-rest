@@ -3,6 +3,7 @@ asynciterable
 authed
 beyoncé
 cacheable
+careted
 changesets
 cimg
 circleci
