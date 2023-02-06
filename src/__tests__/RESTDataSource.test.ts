@@ -283,11 +283,142 @@ describe('RESTDataSource', () => {
 
       const data = await dataSource.postFoo();
       expect(spyOnHttpFetch.mock.calls[0][1]).toEqual({
-        headers: {"content-type": "application/json"},
-        body: "{\"foo\":\"bar\"}",
-        method: "POST",
-        params: new URLSearchParams()
-      })
+        headers: { 'content-type': 'application/json' },
+        body: '{"foo":"bar"}',
+        method: 'POST',
+        params: new URLSearchParams(),
+      });
+      expect(data).toEqual({ foo: 'bar' });
+    });
+
+    it('converts uppercase-containing headers to lowercase', async () => {
+      const requestOptions = {
+        headers: {
+          'Content-Type': 'application/json',
+          'Test-Header': 'foobar',
+          'ANOTHER-TEST-HEADER': 'test2',
+        },
+        body: JSON.parse(JSON.stringify({ foo: 'bar' })),
+      };
+      const dataSource = new (class extends RESTDataSource {
+        override baseURL = 'https://api.example.com';
+
+        postFoo() {
+          return this.post('foo', requestOptions);
+        }
+      })();
+
+      const spyOnHttpFetch = jest.spyOn(dataSource['httpCache'], 'fetch');
+
+      nock(apiUrl)
+        .post('/foo')
+        .reply(200, { foo: 'bar' }, { 'Content-Type': 'application/json' });
+
+      const data = await dataSource.postFoo();
+      expect(spyOnHttpFetch.mock.calls[0][1]).toEqual({
+        headers: {
+          'content-type': 'application/json',
+          'test-header': 'foobar',
+          'another-test-header': 'test2',
+        },
+        body: '{"foo":"bar"}',
+        method: 'POST',
+        params: new URLSearchParams(),
+      });
+      expect(data).toEqual({ foo: 'bar' });
+    });
+
+    it('adds a application/json content header', async () => {
+      const requestOptions = {
+        body: JSON.parse(JSON.stringify({ foo: 'bar' })),
+      };
+      const dataSource = new (class extends RESTDataSource {
+        override baseURL = 'https://api.example.com';
+
+        postFoo() {
+          return this.post('foo', requestOptions);
+        }
+      })();
+
+      const spyOnHttpFetch = jest.spyOn(dataSource['httpCache'], 'fetch');
+
+      nock(apiUrl)
+        .post('/foo')
+        .reply(200, { foo: 'bar' }, { 'Content-Type': 'application/json' });
+
+      const data = await dataSource.postFoo();
+      expect(spyOnHttpFetch.mock.calls[0][1]).toEqual({
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: '{"foo":"bar"}',
+        method: 'POST',
+        params: new URLSearchParams(),
+      });
+      expect(data).toEqual({ foo: 'bar' });
+    });
+
+    it('adds a application/json content header when no headers are passed in', async () => {
+      const requestOptions = {
+        body: JSON.parse(JSON.stringify({ foo: 'bar' })),
+      };
+      const dataSource = new (class extends RESTDataSource {
+        override baseURL = 'https://api.example.com';
+
+        postFoo() {
+          return this.post('foo', requestOptions);
+        }
+      })();
+
+      const spyOnHttpFetch = jest.spyOn(dataSource['httpCache'], 'fetch');
+
+      nock(apiUrl)
+        .post('/foo')
+        .reply(200, { foo: 'bar' }, { 'Content-Type': 'application/json' });
+
+      const data = await dataSource.postFoo();
+      expect(spyOnHttpFetch.mock.calls[0][1]).toEqual({
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: '{"foo":"bar"}',
+        method: 'POST',
+        params: new URLSearchParams(),
+      });
+      expect(data).toEqual({ foo: 'bar' });
+    });
+
+    it('adds a application/json content header when no content-type headers are passed in', async () => {
+      const requestOptions = {
+        headers: {
+          'test-header': 'foobar',
+        },
+        body: JSON.parse(JSON.stringify({ foo: 'bar' })),
+      };
+      const dataSource = new (class extends RESTDataSource {
+        override baseURL = 'https://api.example.com';
+
+        postFoo() {
+          return this.post('foo', requestOptions);
+        }
+      })();
+
+      const spyOnHttpFetch = jest.spyOn(dataSource['httpCache'], 'fetch');
+
+      nock(apiUrl)
+        .post('/foo')
+        .reply(200, { foo: 'bar' }, { 'Content-Type': 'application/json' });
+
+      const data = await dataSource.postFoo();
+      expect(spyOnHttpFetch.mock.calls[0][1]).toEqual({
+        headers: {
+          'content-type': 'application/json',
+          'test-header': 'foobar'
+        },
+        body: '{"foo":"bar"}',
+        method: 'POST',
+        params: new URLSearchParams(),
+      });
       expect(data).toEqual({ foo: 'bar' });
     });
 
