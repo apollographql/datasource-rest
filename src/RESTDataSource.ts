@@ -454,11 +454,11 @@ export abstract class RESTDataSource {
     path: string,
     incomingRequest: DataSourceRequest = {},
   ): Promise<DataSourceFetchResult<TResult>> {
-    let headers: Record<string, string> = {};
+    const downcasedHeaders: Record<string, string> = {};
     if (incomingRequest.headers) {
       // map incoming headers to lower-case headers
       Object.entries(incomingRequest.headers).forEach(([key, value]) => {
-        headers[key.toLowerCase()] = value;
+        downcasedHeaders[key.toLowerCase()] = value;
       });
     }
 
@@ -469,7 +469,7 @@ export abstract class RESTDataSource {
         incomingRequest.params instanceof URLSearchParams
           ? incomingRequest.params
           : this.urlSearchParamsFromRecord(incomingRequest.params),
-      headers: headers,
+      headers: downcasedHeaders,
     };
     // Default to GET in the case that `fetch` is called directly with no method
     // provided. Our other request methods all provide one.
