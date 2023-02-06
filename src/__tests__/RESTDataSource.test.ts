@@ -260,6 +260,134 @@ describe('RESTDataSource', () => {
       await dataSource.getFoo('1');
     });
 
+    it('contains only one Content-Type header when Content-Type already exists is application/json', async () => {
+      const requestOptions = {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: { foo: 'bar' },
+      };
+      const dataSource = new (class extends RESTDataSource {
+        override baseURL = 'https://api.example.com';
+
+        postFoo() {
+          return this.post('foo', requestOptions);
+        }
+      })();
+
+      const spyOnHttpFetch = jest.spyOn(dataSource['httpCache'], 'fetch');
+
+      nock(apiUrl)
+        .post('/foo')
+        .reply(200, { foo: 'bar' }, { 'Content-Type': 'application/json' });
+
+      const data = await dataSource.postFoo();
+      expect(spyOnHttpFetch.mock.calls[0][1]).toEqual({
+        headers: { 'content-type': 'application/json' },
+        body: '{"foo":"bar"}',
+        method: 'POST',
+        params: new URLSearchParams(),
+      });
+      expect(data).toEqual({ foo: 'bar' });
+    });
+
+    it('converts uppercase-containing headers to lowercase', async () => {
+      const requestOptions = {
+        headers: {
+          'Content-Type': 'application/json',
+          'Test-Header': 'foobar',
+          'ANOTHER-TEST-HEADER': 'test2',
+        },
+        body: { foo: 'bar' },
+      };
+      const dataSource = new (class extends RESTDataSource {
+        override baseURL = 'https://api.example.com';
+
+        postFoo() {
+          return this.post('foo', requestOptions);
+        }
+      })();
+
+      const spyOnHttpFetch = jest.spyOn(dataSource['httpCache'], 'fetch');
+
+      nock(apiUrl)
+        .post('/foo')
+        .reply(200, { foo: 'bar' }, { 'Content-Type': 'application/json' });
+
+      const data = await dataSource.postFoo();
+      expect(spyOnHttpFetch.mock.calls[0][1]).toEqual({
+        headers: {
+          'content-type': 'application/json',
+          'test-header': 'foobar',
+          'another-test-header': 'test2',
+        },
+        body: '{"foo":"bar"}',
+        method: 'POST',
+        params: new URLSearchParams(),
+      });
+      expect(data).toEqual({ foo: 'bar' });
+    });
+
+    it('adds an `application/json` content-type header when none is present', async () => {
+      const requestOptions = {
+        body: { foo: 'bar' },
+      };
+      const dataSource = new (class extends RESTDataSource {
+        override baseURL = 'https://api.example.com';
+
+        postFoo() {
+          return this.post('foo', requestOptions);
+        }
+      })();
+
+      const spyOnHttpFetch = jest.spyOn(dataSource['httpCache'], 'fetch');
+
+      nock(apiUrl)
+        .post('/foo')
+        .reply(200, { foo: 'bar' }, { 'Content-Type': 'application/json' });
+
+      const data = await dataSource.postFoo();
+      expect(spyOnHttpFetch.mock.calls[0][1]).toEqual({
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: '{"foo":"bar"}',
+        method: 'POST',
+        params: new URLSearchParams(),
+      });
+      expect(data).toEqual({ foo: 'bar' });
+    });
+
+    it('adds an `application/json` content header when no headers are passed in', async () => {
+      const requestOptions = {
+        body: { foo: 'bar' },
+      };
+      const dataSource = new (class extends RESTDataSource {
+        override baseURL = 'https://api.example.com';
+
+        postFoo() {
+          return this.post('foo', requestOptions);
+        }
+      })();
+
+      const spyOnHttpFetch = jest.spyOn(dataSource['httpCache'], 'fetch');
+
+      nock(apiUrl)
+        .post('/foo')
+        .reply(200, { foo: 'bar' }, { 'Content-Type': 'application/json' });
+
+      const data = await dataSource.postFoo();
+      expect(spyOnHttpFetch.mock.calls[0][1]).toEqual({
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: '{"foo":"bar"}',
+        method: 'POST',
+        params: new URLSearchParams(),
+      });
+      expect(data).toEqual({ foo: 'bar' });
+    });
+
     it('serializes a request body that is an object as JSON', async () => {
       const expectedFoo = { foo: 'bar' };
       const dataSource = new (class extends RESTDataSource {

@@ -454,6 +454,14 @@ export abstract class RESTDataSource {
     path: string,
     incomingRequest: DataSourceRequest = {},
   ): Promise<DataSourceFetchResult<TResult>> {
+    const downcasedHeaders: Record<string, string> = {};
+    if (incomingRequest.headers) {
+      // map incoming headers to lower-case headers
+      Object.entries(incomingRequest.headers).forEach(([key, value]) => {
+        downcasedHeaders[key.toLowerCase()] = value;
+      });
+    }
+
     const augmentedRequest: AugmentedRequest = {
       ...incomingRequest,
       // guarantee params and headers objects before calling `willSendRequest` for convenience
@@ -461,7 +469,7 @@ export abstract class RESTDataSource {
         incomingRequest.params instanceof URLSearchParams
           ? incomingRequest.params
           : this.urlSearchParamsFromRecord(incomingRequest.params),
-      headers: incomingRequest.headers ?? Object.create(null),
+      headers: downcasedHeaders,
     };
     // Default to GET in the case that `fetch` is called directly with no method
     // provided. Our other request methods all provide one.
@@ -481,9 +489,7 @@ export abstract class RESTDataSource {
     if (this.shouldJSONSerializeBody(augmentedRequest.body)) {
       augmentedRequest.body = JSON.stringify(augmentedRequest.body);
       // If Content-Type header has not been previously set, set to application/json
-      if (!augmentedRequest.headers) {
-        augmentedRequest.headers = { 'content-type': 'application/json' };
-      } else if (!augmentedRequest.headers['content-type']) {
+      if (!augmentedRequest.headers['content-type']) {
         augmentedRequest.headers['content-type'] = 'application/json';
       }
     }
