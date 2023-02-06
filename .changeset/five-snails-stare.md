@@ -2,10 +2,15 @@
 '@apollo/datasource-rest': patch
 ---
 
-Update `http-cache-semantics` package to latest patch, resolving a security issue.
+Update `http-cache-semantics` package to latest patch, resolving a security
+issue.
 
 Unlike many security updates Apollo repos receive, this is an _actual_ (non-dev)
-dependency of this package which means it is actually a user-facing security issue.
+dependency of this package which means it is actually a user-facing security
+issue.
+
+The potential impact of this issue is limited to a DOS attack (via an
+inefficient regex).
 
 This security issue would only affect you if either:
 * you pass untrusted (i.e. from your users) `cache-control` request headers
