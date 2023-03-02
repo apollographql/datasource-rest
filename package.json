@@ -30,12 +30,12 @@
     "watch": "tsc --build --watch"
   },
   "devDependencies": {
-    "@apollo/server": "4.4.0",
+    "@apollo/server": "4.4.1",
     "@changesets/changelog-github": "0.4.8",
     "@changesets/cli": "2.26.0",
     "@types/jest": "29.4.0",
     "@types/lodash.isplainobject": "4.0.7",
-    "@types/node": "14.18.36",
+    "@types/node": "14.18.37",
     "cspell": "6.27.0",
     "form-data": "4.0.0",
     "graphql": "16.6.0",
@@ -61,6 +61,6 @@
   },
   "volta": {
     "node": "18.14.2",
-    "npm": "9.5.1"
+    "npm": "9.6.0"
   }
 }
