@@ -28,7 +28,7 @@
     "test": "jest",
     "test:ci": "jest --coverage --ci --maxWorkers=2 --reporters=default --reporters=jest-junit",
     "watch": "tsc --build --watch",
-    "lint": "eslint ."
+    "lint": "eslint src/**/*.ts"
   },
   "devDependencies": {
     "@apollo/server": "4.5.0",
