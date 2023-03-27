@@ -51,6 +51,13 @@ jobs:
       - setup-node
       - run: npm run prettier-check
 
+  Lint:
+    docker:
+    - image: cimg/base:stable
+    steps:
+      - setup-node
+      - run: npm run lint
+
   Spell Check:
     docker:
     - image: cimg/base:stable
@@ -71,4 +78,5 @@ workflows:
                 - "16"
                 - "18"
       - Prettier
+      - Lint
       - Spell Check
