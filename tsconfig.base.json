@@ -18,7 +18,8 @@
     "noUnusedParameters": true,
     "noUnusedLocals": true,
     "forceConsistentCasingInFileNames": true,
-    "importsNotUsedAsValues": "error",
+    // TODO(esm): enable if this package is ever ESM-only
+    // "verbatimModuleSyntax": true,
     "lib": ["es2019", "esnext.asynciterable"],
     "types": ["node"],
     "baseUrl": ".",

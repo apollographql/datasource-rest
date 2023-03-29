@@ -1,10 +1,10 @@
 import {
-  AugmentedRequest,
-  CacheOptions,
-  DataSourceConfig,
-  DataSourceFetchResult,
-  RequestDeduplicationPolicy,
-  RequestOptions,
+  type AugmentedRequest,
+  type CacheOptions,
+  type DataSourceConfig,
+  type DataSourceFetchResult,
+  type RequestDeduplicationPolicy,
+  type RequestOptions,
   RESTDataSource,
 } from '../RESTDataSource';
 
