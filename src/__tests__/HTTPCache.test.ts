@@ -1,6 +1,7 @@
 import fetch from 'node-fetch';
 import nock from 'nock';
 import { HTTPCache } from '../HTTPCache';
+import type { CacheOptions } from '../RESTDataSource';
 import { nockAfterEach, nockBeforeEach } from './nockAssertions';
 import { FakeableTTLTestingCache } from './FakeableTTLTestingCache';
 
@@ -404,6 +405,32 @@ describe('HTTPCache', () => {
       expect.any(String),
       expect.any(String),
       { ttl: 60 },
+    );
+
+    storeSet.mockRestore();
+  });
+
+  it('sets the TTL less than max-age when the response contains an ETag header, and set additional cache options', async () => {
+    mockGetAdaLovelace({ 'cache-control': 'max-age=30' });
+
+    const storeSet = jest.spyOn(store, 'set');
+
+    const { cacheWritePromise } = await httpCache.fetch(
+      adaUrl,
+      {},
+      {
+        cacheOptions: {
+          ttl: 20,
+          tags: ['foo', 'bar'],
+        } as unknown as CacheOptions,
+      },
+    );
+    await cacheWritePromise;
+
+    expect(storeSet).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      { ttl: 20, tags: ['foo', 'bar'] },
     );
 
     storeSet.mockRestore();

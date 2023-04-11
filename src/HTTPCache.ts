@@ -246,6 +246,7 @@ export class HTTPCache {
       cacheWritePromise: this.readResponseAndWriteToCache({
         response,
         policy,
+        cacheOptions,
         ttl,
         ttlOverride,
         cacheKey,
@@ -256,12 +257,14 @@ export class HTTPCache {
   private async readResponseAndWriteToCache({
     response,
     policy,
+    cacheOptions,
     ttl,
     ttlOverride,
     cacheKey,
   }: {
     response: FetcherResponse;
     policy: CachePolicy;
+    cacheOptions?: CacheOptions;
     ttl: number | null | undefined;
     ttlOverride: number | undefined;
     cacheKey: string;
@@ -273,7 +276,9 @@ export class HTTPCache {
       body,
     });
 
+    // Set the value into the cache, and forward all the set cache option into the setter function
     await this.keyValueCache.set(cacheKey, entry, {
+      ...(cacheOptions ?? {}),
       ttl,
     });
   }
