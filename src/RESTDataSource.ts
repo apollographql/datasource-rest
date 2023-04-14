@@ -613,7 +613,7 @@ export abstract class RESTDataSource {
   // Override this method to handle these errors in a different way.
   protected catchCacheWritePromiseErrors(cacheWritePromise: Promise<void>) {
     cacheWritePromise.catch((e) => {
-      console.error(`Error writing from RESTDataSource to cache: ${e}`);
+      this.logger.error(`Error writing from RESTDataSource to cache: ${e}`);
     });
   }
 
