@@ -124,6 +124,7 @@ const NODE_ENV = process.env.NODE_ENV;
 export interface DataSourceConfig {
   cache?: KeyValueCache;
   fetch?: Fetcher;
+  logger?: Logger;
 }
 
 export interface RequestDeduplicationResult {
@@ -171,13 +172,20 @@ export type RequestDeduplicationPolicy =
   // the deduplication store.)
   | { policy: 'do-not-deduplicate'; invalidateDeduplicationKeys?: string[] };
 
+export interface Logger {
+  info(msg: string): void;
+  error(error: any, ...data: any[]): void;
+}
+
 export abstract class RESTDataSource {
   protected httpCache: HTTPCache;
   protected deduplicationPromises = new Map<string, Promise<any>>();
   baseURL?: string;
+  logger: Logger;
 
   constructor(config?: DataSourceConfig) {
     this.httpCache = new HTTPCache(config?.cache, config?.fetch);
+    this.logger = config?.logger ? config.logger : console;
   }
 
   // By default, we use `cacheKey` from the request if provided, or the full
@@ -622,7 +630,7 @@ export abstract class RESTDataSource {
       } finally {
         const duration = Date.now() - startTime;
         const label = `${request.method || 'GET'} ${url}`;
-        console.log(`${label} (${duration}ms)`);
+        this.logger.info(`${label} (${duration}ms)`);
       }
     } else {
       return fn();
