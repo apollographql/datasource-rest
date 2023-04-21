@@ -8,6 +8,7 @@ import type { WithRequired } from '@apollo/utils.withrequired';
 import { GraphQLError } from 'graphql';
 import isPlainObject from 'lodash.isplainobject';
 import { HTTPCache } from './HTTPCache';
+import type { Logger } from '@apollo/utils.logger';
 import type { Options as HttpCacheSemanticsOptions } from 'http-cache-semantics';
 
 export type ValueOrPromise<T> = T | Promise<T>;
@@ -171,11 +172,6 @@ export type RequestDeduplicationPolicy =
   // doing (say) `DELETE /path` invalidates any result for `GET /path` within
   // the deduplication store.)
   | { policy: 'do-not-deduplicate'; invalidateDeduplicationKeys?: string[] };
-
-export interface Logger {
-  info(msg: string): void;
-  error(error: any, ...data: any[]): void;
-}
 
 export abstract class RESTDataSource {
   protected httpCache: HTTPCache;

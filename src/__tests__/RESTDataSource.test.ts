@@ -14,6 +14,7 @@ import nock from 'nock';
 import { nockAfterEach, nockBeforeEach } from './nockAssertions';
 import type { WithRequired } from '@apollo/utils.withrequired';
 import { Headers as NodeFetchHeaders } from 'node-fetch';
+import type { Logger } from '@apollo/utils.logger';
 
 const apiUrl = 'https://api.example.com';
 
@@ -21,7 +22,29 @@ describe('RESTDataSource', () => {
   beforeEach(nockBeforeEach);
   afterEach(nockAfterEach);
 
+  it('not overriding logger will use "console" as logger', async () => {
+    const dataSource = new (class extends RESTDataSource {})();
+
+    expect(dataSource.logger).toEqual(console)
+  });
+
+  it('providing override to logger will use "console" as logger', async () => {
+    const testLogger: Logger = {
+      debug: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+    }
+    const dataSource = new (class extends RESTDataSource {})({
+      logger: testLogger
+    });
+
+    expect(dataSource.logger).not.toEqual(console)
+    expect(dataSource.logger).toEqual(testLogger)
+  });
+
   describe('constructing requests', () => {
+
     it('interprets paths relative to the base URL', async () => {
       const dataSource = new (class extends RESTDataSource {
         override baseURL = apiUrl;

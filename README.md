@@ -53,6 +53,25 @@ class MoviesAPI extends RESTDataSource {
 
 This README lists all the protected methods. In practice, if you're looking to customize behavior by overriding methods, reading the [source code](https://github.com/apollographql/datasource-rest/tree/main/src/RESTDataSource.ts) is the best option.
 
+#### Constructor
+
+The `RESTDataSource` takes in a `DataSourceConfig` which allows for overriding some default behavior.
+
+Configuration Overrides
+  - `cache` - Custom [`KeyValueCache`](https://www.npmjs.com/package/@apollo/utils.keyvaluecache) implementation
+  - `fetch` - Custom [`Fetcher`](https://www.npmjs.com/package/@apollo/utils.fetcher) implementation
+  - `logger` - Custom [`Logger`](https://www.npmjs.com/package/@apollo/utils.logger) implementation that will replace all logging activity within `RESTDataSource`
+
+To override the RESTDataSource, see the following example code:
+
+```typescript
+const dataSource = new (class extends RESTDataSource {})({
+  cache: customCache,
+  fetch: customFetcher,
+  logger: customLogger,
+});
+```
+
 #### Properties
 
 ##### `baseURL`
