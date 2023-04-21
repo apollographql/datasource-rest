@@ -185,7 +185,7 @@ export abstract class RESTDataSource {
 
   constructor(config?: DataSourceConfig) {
     this.httpCache = new HTTPCache(config?.cache, config?.fetch);
-    this.logger = config?.logger ? config.logger : console;
+    this.logger = config?.logger ?? console;
   }
 
   // By default, we use `cacheKey` from the request if provided, or the full
