@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@apollo/server": "4.7.0",
+    "@apollo/utils.logger": "^3.0.0",
     "@changesets/changelog-github": "0.4.8",
     "@changesets/cli": "2.26.1",
     "@types/jest": "29.5.1",
