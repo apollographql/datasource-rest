@@ -25,7 +25,7 @@ describe('RESTDataSource', () => {
   it('not overriding logger will use "console" as logger', async () => {
     const dataSource = new (class extends RESTDataSource {})();
 
-    expect(dataSource.logger).toEqual(console)
+    expect(dataSource.logger).toEqual(console);
   });
 
   it('providing override to logger will use "console" as logger', async () => {
@@ -34,17 +34,16 @@ describe('RESTDataSource', () => {
       info: jest.fn(),
       error: jest.fn(),
       warn: jest.fn(),
-    }
+    };
     const dataSource = new (class extends RESTDataSource {})({
-      logger: testLogger
+      logger: testLogger,
     });
 
-    expect(dataSource.logger).not.toEqual(console)
-    expect(dataSource.logger).toEqual(testLogger)
+    expect(dataSource.logger).not.toEqual(console);
+    expect(dataSource.logger).toEqual(testLogger);
   });
 
   describe('constructing requests', () => {
-
     it('interprets paths relative to the base URL', async () => {
       const dataSource = new (class extends RESTDataSource {
         override baseURL = apiUrl;
