@@ -15,4 +15,4 @@ const dataSource = new (class extends RESTDataSource {})({
 });
 ```
 
-All logging calls made by the `RESTDataSource` will now use the `pino` logger instead of the `console` logger.
+In the example above, all logging calls made by the `RESTDataSource` will now use the `pino` logger instead of the `console` logger.
