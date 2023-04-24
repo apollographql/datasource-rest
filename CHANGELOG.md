@@ -1,5 +1,25 @@
 # @apollo/datasource-rest
 
+## 5.1.0
+
+### Minor Changes
+
+- [#186](https://github.com/apollographql/datasource-rest/pull/186) [`5ac9b52`](https://github.com/apollographql/datasource-rest/commit/5ac9b524b1227b018c522da1a4e53425d2b86024) Thanks [@js-lowes](https://github.com/js-lowes)! - Customize the logger used by `RESTDataSource`.
+  By default the `RESTDataSource` will use `console`.
+  Common use cases would be to override the default logger with `pino` or `winston`.
+
+  E.g.
+
+  ```typescript
+  const pino = require('pino');
+  const loggerPino = pino({});
+  const dataSource = new (class extends RESTDataSource {})({
+    logger: loggerPino,
+  });
+  ```
+
+  In the example above, all logging calls made by the `RESTDataSource` will now use the `pino` logger instead of the `console` logger.
+
 ## 5.0.2
 
 ### Patch Changes
