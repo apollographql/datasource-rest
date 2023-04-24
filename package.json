@@ -24,7 +24,7 @@
     "prettier-check": "prettier --check .",
     "prettier-fix": "prettier --write .",
     "publish-changeset": "changeset publish",
-    "spell-check": "cspell lint '**' --no-progress || (echo 'Add any real words to cspell-dict.txt.'; exit 1)",
+    "spell-check": "cspell lint '**' '.changeset/**' --no-progress || (echo 'Add any real words to cspell-dict.txt.'; exit 1)",
     "test": "jest",
     "test:ci": "jest --coverage --ci --maxWorkers=2 --reporters=default --reporters=jest-junit",
     "watch": "tsc --build --watch",
