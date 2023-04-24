@@ -17,6 +17,7 @@ httpcache
 isplainobject
 keyvaluecache
 overridable
+pino
 revalidates
 singletonizes
 unmock
