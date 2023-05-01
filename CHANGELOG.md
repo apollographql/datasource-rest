@@ -1,5 +1,11 @@
 # @apollo/datasource-rest
 
+## 5.1.1
+
+### Patch Changes
+
+- [#197](https://github.com/apollographql/datasource-rest/pull/197) [`fcd05fa`](https://github.com/apollographql/datasource-rest/commit/fcd05faa1b0a27adebfbfafca3f2e9a697a5db8d) Thanks [@AaronMoat](https://github.com/AaronMoat)! - Don't crash when receiving non-string, non-array headers
+
 ## 5.1.0
 
 ### Minor Changes
