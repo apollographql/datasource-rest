@@ -331,12 +331,12 @@ function cachePolicyHeadersToNodeFetchHeadersInit(
 ): NodeFetchHeadersInit {
   const headerList = [];
   for (const [name, value] of Object.entries(headers)) {
-    if (typeof value === 'string') {
-      headerList.push([name, value]);
-    } else if (value) {
+    if (Array.isArray(value)) {
       for (const subValue of value) {
         headerList.push([name, subValue]);
       }
+    } else if (value) {
+      headerList.push([name, value]);
     }
   }
   return headerList;
@@ -354,10 +354,10 @@ function cachePolicyHeadersToFetcherHeadersInit(
 ): Record<string, string> {
   const headerRecord = Object.create(null);
   for (const [name, value] of Object.entries(headers)) {
-    if (typeof value === 'string') {
-      headerRecord[name] = value;
-    } else if (value) {
+    if (Array.isArray(value)) {
       headerRecord[name] = value.join(', ');
+    } else if (value) {
+      headerRecord[name] = value;
     }
   }
   return headerRecord;

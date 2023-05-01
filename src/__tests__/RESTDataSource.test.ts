@@ -1848,6 +1848,35 @@ describe('RESTDataSource', () => {
         await dataSource.getFoo(2, true);
       });
 
+      it('should not crash in revalidation flow header handling when sending non-array non-string headers', async () => {
+        jest.useFakeTimers({ doNotFake: ['nextTick'] });
+
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = apiUrl;
+
+          getFoo(id: number) {
+            return this.fetch(`foo/${id}`, {
+              headers: {
+                // @ts-expect-error
+                x: 1,
+              },
+              cacheOptions: { ttl: 1 },
+            });
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').times(2).reply(200);
+
+        await dataSource.getFoo(1);
+        await dataSource.getFoo(1);
+
+        jest.advanceTimersByTime(1000);
+
+        await dataSource.getFoo(1);
+
+        jest.useRealTimers();
+      });
+
       describe('raw header access when using node-fetch', () => {
         it('for a non-cacheable request', async () => {
           const dataSource = new (class extends RESTDataSource {
