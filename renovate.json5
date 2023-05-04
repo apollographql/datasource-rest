@@ -25,12 +25,7 @@
     // versions we support.
     {
       "matchPackageNames": ["@types/node"],
-      "allowedVersions": "14.x"
-    },
-    // @apollo/utils@3 drop support for node v16. We can take this when we drop node v14 support.
-    {
-      matchPackagePatterns: ["^@apollo/utils"],
-      allowedVersions: "2.x"
+      "allowedVersions": "16.x"
     },
     // v3 is ESM only
     {
