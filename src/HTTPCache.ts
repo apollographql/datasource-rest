@@ -10,8 +10,8 @@ import type {
   FetcherResponse,
   FetcherRequestInit,
 } from '@apollo/utils.fetcher';
-import {
-  type KeyValueCache,
+import type {
+  KeyValueCache,
   InMemoryLRUCache,
   PrefixingKeyValueCache,
 } from '@apollo/utils.keyvaluecache';
