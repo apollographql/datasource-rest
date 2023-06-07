@@ -1,5 +1,13 @@
 # @apollo/datasource-rest
 
+## 6.0.1
+
+### Patch Changes
+
+- [#214](https://github.com/apollographql/datasource-rest/pull/214) [`c7b190a`](https://github.com/apollographql/datasource-rest/commit/c7b190a03d7c768e9db598755ce94ae2fa4581b8) Thanks [@trevor-scheer](https://github.com/trevor-scheer)! - Fix bug in Cloudflare Worker usage where we try to call the `.raw()` method on its response headers object when it doesn't exist.
+
+  For some reason, the Cloudflare Worker's global `fetch` `HeadersList` object is passing the instanceof check against `node-fetch`'s `Headers` class, but it doesn't have the `.raw()` method we expect on it. To be sure, we can just make sure it's there before we call it.
+
 ## 6.0.0
 
 ### Major Changes
