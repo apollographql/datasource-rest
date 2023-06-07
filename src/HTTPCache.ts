@@ -296,6 +296,11 @@ function policyResponseFrom(response: FetcherResponse) {
     status: response.status,
     headers:
       response.headers instanceof NodeFetchHeaders
+        // https://github.com/apollo-server-integrations/apollo-server-integration-cloudflare-workers/issues/37
+        // For some reason, Cloudflare Workers' `response.headers` is passing
+        // the instanceof check here but doesn't have the `raw()` method that
+        // node-fetch's headers have.
+        && 'raw' in response.headers
         ? nodeFetchHeadersToCachePolicyHeaders(response.headers)
         : Object.fromEntries(response.headers),
   };
