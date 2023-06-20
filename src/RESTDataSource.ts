@@ -284,6 +284,7 @@ export abstract class RESTDataSource {
       // isn't enough to `JSON.parse`, and trying will result in an error.
       response.status !== 204 &&
       contentLength !== '0' &&
+      contentLength !== null &&
       contentType &&
       (contentType.startsWith('application/json') ||
         contentType.endsWith('+json'))
