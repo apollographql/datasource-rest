@@ -37,13 +37,13 @@
     "@types/jest": "29.5.2",
     "@types/lodash.isplainobject": "4.0.7",
     "@types/node": "16.18.38",
-    "@typescript-eslint/eslint-plugin": "5.60.1",
-    "@typescript-eslint/parser": "5.60.1",
+    "@typescript-eslint/eslint-plugin": "5.61.0",
+    "@typescript-eslint/parser": "5.61.0",
     "cspell": "6.31.1",
     "eslint": "8.44.0",
     "form-data": "4.0.0",
     "graphql": "16.7.1",
-    "jest": "29.5.0",
+    "jest": "29.6.1",
     "jest-junit": "16.0.0",
     "nock": "13.3.1",
     "prettier": "2.8.8",
@@ -66,6 +66,6 @@
   },
   "volta": {
     "node": "18.16.1",
-    "npm": "9.7.2"
+    "npm": "9.8.0"
   }
 }
