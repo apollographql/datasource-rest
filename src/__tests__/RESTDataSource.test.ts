@@ -216,7 +216,10 @@ describe('RESTDataSource', () => {
       class AuthedDataSource extends RESTDataSource {
         override baseURL = 'https://api.example.com';
 
-        constructor(private token: string, config?: DataSourceConfig) {
+        constructor(
+          private token: string,
+          config?: DataSourceConfig,
+        ) {
           super(config);
         }
 
@@ -258,7 +261,10 @@ describe('RESTDataSource', () => {
       class AuthedDataSource extends RESTDataSource {
         override baseURL = 'https://api.example.com';
 
-        constructor(private token: string, config?: DataSourceConfig) {
+        constructor(
+          private token: string,
+          config?: DataSourceConfig,
+        ) {
           super(config);
         }
 
