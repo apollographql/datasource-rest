@@ -2,8 +2,8 @@
   "extends": [
     "config:js-lib",
     // Our default configuration. See
-    // https://github.com/apollographql/renovate-config-apollo-open-source/blob/master/package.json
-    "apollo-open-source",
+    // https://github.com/apollographql/renovate-config-apollo-open-source/blob/master/default.json5
+    "github>apollographql/renovate-config-apollo-open-source:default.json5",
     "group:jestMonorepo",
     "group:jestPlusTSJest",
     "group:jestPlusTypes",
@@ -25,7 +25,7 @@
     // versions we support.
     {
       "matchPackageNames": ["@types/node"],
-      "allowedVersions": "14.x"
+      "allowedVersions": "16.x"
     },
     // v3 is ESM only
     {

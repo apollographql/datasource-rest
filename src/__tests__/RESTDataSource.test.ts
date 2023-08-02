@@ -14,12 +14,34 @@ import nock from 'nock';
 import { nockAfterEach, nockBeforeEach } from './nockAssertions';
 import type { WithRequired } from '@apollo/utils.withrequired';
 import { Headers as NodeFetchHeaders } from 'node-fetch';
+import type { Logger } from '@apollo/utils.logger';
 
 const apiUrl = 'https://api.example.com';
 
 describe('RESTDataSource', () => {
   beforeEach(nockBeforeEach);
   afterEach(nockAfterEach);
+
+  it('not overriding logger will use "console" as logger', async () => {
+    const dataSource = new (class extends RESTDataSource {})();
+
+    expect(dataSource.logger).toEqual(console);
+  });
+
+  it('providing override to logger will use "console" as logger', async () => {
+    const testLogger: Logger = {
+      debug: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+    };
+    const dataSource = new (class extends RESTDataSource {})({
+      logger: testLogger,
+    });
+
+    expect(dataSource.logger).not.toEqual(console);
+    expect(dataSource.logger).toEqual(testLogger);
+  });
 
   describe('constructing requests', () => {
     it('interprets paths relative to the base URL', async () => {
@@ -194,7 +216,10 @@ describe('RESTDataSource', () => {
       class AuthedDataSource extends RESTDataSource {
         override baseURL = 'https://api.example.com';
 
-        constructor(private token: string, config?: DataSourceConfig) {
+        constructor(
+          private token: string,
+          config?: DataSourceConfig,
+        ) {
           super(config);
         }
 
@@ -236,7 +261,10 @@ describe('RESTDataSource', () => {
       class AuthedDataSource extends RESTDataSource {
         override baseURL = 'https://api.example.com';
 
-        constructor(private token: string, config?: DataSourceConfig) {
+        constructor(
+          private token: string,
+          config?: DataSourceConfig,
+        ) {
           super(config);
         }
 
@@ -1824,6 +1852,35 @@ describe('RESTDataSource', () => {
         // Call a second time which should be not be cached because of
         // `set-cookie` with `shared: true`. (Note the `.times(2)` above.)
         await dataSource.getFoo(2, true);
+      });
+
+      it('should not crash in revalidation flow header handling when sending non-array non-string headers', async () => {
+        jest.useFakeTimers({ doNotFake: ['nextTick'] });
+
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = apiUrl;
+
+          getFoo(id: number) {
+            return this.fetch(`foo/${id}`, {
+              headers: {
+                // @ts-expect-error
+                x: 1,
+              },
+              cacheOptions: { ttl: 1 },
+            });
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').times(2).reply(200);
+
+        await dataSource.getFoo(1);
+        await dataSource.getFoo(1);
+
+        jest.advanceTimersByTime(1000);
+
+        await dataSource.getFoo(1);
+
+        jest.useRealTimers();
       });
 
       describe('raw header access when using node-fetch', () => {

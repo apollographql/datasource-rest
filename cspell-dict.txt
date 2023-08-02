@@ -14,9 +14,11 @@ direnv
 Fakeable
 falsey
 httpcache
+instanceof
 isplainobject
 keyvaluecache
 overridable
+pino
 revalidates
 singletonizes
 unmock

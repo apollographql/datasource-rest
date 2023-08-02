@@ -1,5 +1,49 @@
 # @apollo/datasource-rest
 
+## 6.0.1
+
+### Patch Changes
+
+- [#214](https://github.com/apollographql/datasource-rest/pull/214) [`c7b190a`](https://github.com/apollographql/datasource-rest/commit/c7b190a03d7c768e9db598755ce94ae2fa4581b8) Thanks [@trevor-scheer](https://github.com/trevor-scheer)! - Fix bug in Cloudflare Worker usage where we try to call the `.raw()` method on its response headers object when it doesn't exist.
+
+  For some reason, the Cloudflare Worker's global `fetch` `HeadersList` object is passing the instanceof check against `node-fetch`'s `Headers` class, but it doesn't have the `.raw()` method we expect on it. To be sure, we can just make sure it's there before we call it.
+
+## 6.0.0
+
+### Major Changes
+
+- [#196](https://github.com/apollographql/datasource-rest/pull/196) [`f8f0805`](https://github.com/apollographql/datasource-rest/commit/f8f08052fcdd652d5c4420ef05f46b0652d6401e) Thanks [@trevor-scheer](https://github.com/trevor-scheer)! - Drop Node v14 support
+
+  To take this major version, the only change necessary is to ensure your node runtime is using version 16.14.0 or later.
+
+  Node v14 is EOL, so we should drop support for it and upgrade packages and testing accordingly. Note this package has a dependency on `@apollo/utils.keyvaluecache` which requires specifically node@>=16.14 due to its dependency on `lru-cache`.
+
+## 5.1.1
+
+### Patch Changes
+
+- [#197](https://github.com/apollographql/datasource-rest/pull/197) [`fcd05fa`](https://github.com/apollographql/datasource-rest/commit/fcd05faa1b0a27adebfbfafca3f2e9a697a5db8d) Thanks [@AaronMoat](https://github.com/AaronMoat)! - Don't crash when receiving non-string, non-array headers
+
+## 5.1.0
+
+### Minor Changes
+
+- [#186](https://github.com/apollographql/datasource-rest/pull/186) [`5ac9b52`](https://github.com/apollographql/datasource-rest/commit/5ac9b524b1227b018c522da1a4e53425d2b86024) Thanks [@js-lowes](https://github.com/js-lowes)! - Customize the logger used by `RESTDataSource`.
+  By default the `RESTDataSource` will use `console`.
+  Common use cases would be to override the default logger with `pino` or `winston`.
+
+  E.g.
+
+  ```typescript
+  const pino = require('pino');
+  const loggerPino = pino({});
+  const dataSource = new (class extends RESTDataSource {})({
+    logger: loggerPino,
+  });
+  ```
+
+  In the example above, all logging calls made by the `RESTDataSource` will now use the `pino` logger instead of the `console` logger.
+
 ## 5.0.2
 
 ### Patch Changes

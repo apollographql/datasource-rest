@@ -8,6 +8,7 @@ import type { WithRequired } from '@apollo/utils.withrequired';
 import { GraphQLError } from 'graphql';
 import isPlainObject from 'lodash.isplainobject';
 import { HTTPCache } from './HTTPCache';
+import type { Logger } from '@apollo/utils.logger';
 import type { Options as HttpCacheSemanticsOptions } from 'http-cache-semantics';
 
 export type ValueOrPromise<T> = T | Promise<T>;
@@ -124,6 +125,7 @@ const NODE_ENV = process.env.NODE_ENV;
 export interface DataSourceConfig {
   cache?: KeyValueCache;
   fetch?: Fetcher;
+  logger?: Logger;
 }
 
 export interface RequestDeduplicationResult {
@@ -175,9 +177,11 @@ export abstract class RESTDataSource {
   protected httpCache: HTTPCache;
   protected deduplicationPromises = new Map<string, Promise<any>>();
   baseURL?: string;
+  logger: Logger;
 
   constructor(config?: DataSourceConfig) {
     this.httpCache = new HTTPCache(config?.cache, config?.fetch);
+    this.logger = config?.logger ?? console;
   }
 
   // By default, we use `cacheKey` from the request if provided, or the full
@@ -605,7 +609,7 @@ export abstract class RESTDataSource {
   // Override this method to handle these errors in a different way.
   protected catchCacheWritePromiseErrors(cacheWritePromise: Promise<void>) {
     cacheWritePromise.catch((e) => {
-      console.error(`Error writing from RESTDataSource to cache: ${e}`);
+      this.logger.error(`Error writing from RESTDataSource to cache: ${e}`);
     });
   }
 
@@ -622,7 +626,7 @@ export abstract class RESTDataSource {
       } finally {
         const duration = Date.now() - startTime;
         const label = `${request.method || 'GET'} ${url}`;
-        console.log(`${label} (${duration}ms)`);
+        this.logger.info(`${label} (${duration}ms)`);
       }
     } else {
       return fn();
