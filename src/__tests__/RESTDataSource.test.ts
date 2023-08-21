@@ -2195,7 +2195,7 @@ describe('RESTDataSource', () => {
         });
 
         it('is called with the url', async () => {
-          let urlFromDidEncounterError: URL | null = null;
+          let urlFromDidEncounterError: URL | undefined = undefined;
           const dataSource = new (class extends RESTDataSource {
             override baseURL = 'https://api.example.com';
 
@@ -2203,7 +2203,7 @@ describe('RESTDataSource', () => {
               return this.get('foo');
             }
 
-            override didEncounterError(_: Error, __: RequestOptions, url: URL) {
+            override didEncounterError(_: Error, __: RequestOptions, url?: URL) {
               urlFromDidEncounterError = url;
             }
           })();

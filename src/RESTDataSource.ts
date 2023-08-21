@@ -264,7 +264,8 @@ export abstract class RESTDataSource {
   protected didEncounterError(
     _error: Error,
     _request: RequestOptions,
-    _url: URL,
+    // TODO(v7): this shouldn't be optional in a future major version
+    _url?: URL,
   ) {
     // left as a no-op instead of an unimplemented optional method to avoid
     // breaking an existing use case where one calls
