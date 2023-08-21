@@ -2203,7 +2203,11 @@ describe('RESTDataSource', () => {
               return this.get('foo');
             }
 
-            override didEncounterError(_: Error, __: RequestOptions, url?: URL) {
+            override didEncounterError(
+              _: Error,
+              __: RequestOptions,
+              url?: URL,
+            ) {
               urlFromDidEncounterError = url;
             }
           })();
