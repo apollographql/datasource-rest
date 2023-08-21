@@ -2193,6 +2193,39 @@ describe('RESTDataSource', () => {
             message: 'I replaced the error entirely',
           });
         });
+
+        it('is called with the url', async () => {
+          let urlFromDidEncounterError: URL | null = null;
+          const dataSource = new (class extends RESTDataSource {
+            override baseURL = 'https://api.example.com';
+
+            getFoo() {
+              return this.get('foo');
+            }
+
+            override didEncounterError(_: Error, __: RequestOptions, url: URL) {
+              urlFromDidEncounterError = url;
+            }
+          })();
+
+          nock(apiUrl)
+            .get('/foo')
+            .reply(
+              500,
+              {
+                errors: [{ message: 'Houston, we have a problem.' }],
+              },
+              { 'content-type': 'application/json' },
+            );
+
+          try {
+            await dataSource.getFoo();
+          } catch {}
+
+          expect((urlFromDidEncounterError as any).toString()).toMatch(
+            'https://api.example.com/foo',
+          );
+        });
       });
     });
   });
