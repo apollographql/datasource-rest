@@ -261,7 +261,12 @@ export abstract class RESTDataSource {
     request: FetcherRequestInit,
   ): ValueOrPromise<CacheOptions | undefined>;
 
-  protected didEncounterError(_error: Error, _request: RequestOptions) {
+  protected didEncounterError(
+    _error: Error,
+    _request: RequestOptions,
+    // TODO(v7): this shouldn't be optional in a future major version
+    _url?: URL,
+  ) {
     // left as a no-op instead of an unimplemented optional method to avoid
     // breaking an existing use case where one calls
     // `super.didEncounterErrors(...)` This could be unimplemented / undefined
@@ -544,7 +549,7 @@ export abstract class RESTDataSource {
             },
           };
         } catch (error) {
-          this.didEncounterError(error as Error, outgoingRequest);
+          this.didEncounterError(error as Error, outgoingRequest, url);
           throw error;
         }
       });
