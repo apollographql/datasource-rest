@@ -356,8 +356,8 @@ export abstract class RESTDataSource {
     response,
     parsedBody,
   }: {
-    url: URL;
-    request: RequestOptions;
+    url?: URL;
+    request?: RequestOptions;
     response: FetcherResponse;
     parsedBody: unknown;
   }) {
