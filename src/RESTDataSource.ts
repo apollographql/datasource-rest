@@ -361,13 +361,15 @@ export abstract class RESTDataSource {
     response: FetcherResponse;
     parsedBody: unknown;
   }) {
+    const codeByStatus = new Map<number, string>([
+      [401, 'UNAUTHENTICATED'],
+      [403, 'FORBIDDEN'],
+    ]);
+    const code = codeByStatus.get(response.status);
+
     return new GraphQLError(`${response.status}: ${response.statusText}`, {
       extensions: {
-        ...(response.status === 401
-          ? { code: 'UNAUTHENTICATED' }
-          : response.status === 403
-          ? { code: 'FORBIDDEN' }
-          : {}),
+        ...(code && { code }),
         response: {
           url: response.url,
           status: response.status,
