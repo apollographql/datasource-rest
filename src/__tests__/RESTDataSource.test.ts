@@ -1638,6 +1638,7 @@ describe('RESTDataSource', () => {
             },
           },
         });
+        await expect(result).rejects.not.toHaveProperty('extensions.code');
       });
 
       it('puts JSON error responses on the error as an object', async () => {
