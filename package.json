@@ -23,12 +23,13 @@
     "prepack": "npm run build",
     "prettier-check": "prettier --check .",
     "prettier-fix": "prettier --write .",
-    "publish-changeset": "changeset publish",
     "spell-check": "cspell lint '**' '.changeset/**' --no-progress || (echo 'Add any real words to cspell-dict.txt.'; exit 1)",
     "test": "jest",
     "test:ci": "jest --coverage --ci --maxWorkers=2 --reporters=default --reporters=jest-junit",
     "watch": "tsc --build --watch",
-    "lint": "eslint src/**/*.ts"
+    "lint": "eslint src/**/*.ts",
+    "changeset-publish": "changeset publish",
+    "changeset-check": "changeset status --verbose --since=origin/main"
   },
   "devDependencies": {
     "@apollo/server": "4.9.2",
