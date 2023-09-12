@@ -1,5 +1,11 @@
 # @apollo/datasource-rest
 
+## 6.1.1
+
+### Patch Changes
+
+- [#246](https://github.com/apollographql/datasource-rest/pull/246) [`c6ac292`](https://github.com/apollographql/datasource-rest/commit/c6ac29203416e6a91387ab16c6f578b201f22a1b) Thanks [@lotmek](https://github.com/lotmek)! - Make `request` and `url` optional parameters in the `errorFromResponse` method and clean up the implementation.
+
 ## 6.1.0
 
 ### Minor Changes
