@@ -36,12 +36,12 @@ interface ResponseWithCacheWritePromise {
   cacheWritePromise?: Promise<void>;
 }
 
-export class HTTPCache {
-  private keyValueCache: KeyValueCache;
+export class HTTPCache<CO extends CacheOptions = CacheOptions> {
+  private keyValueCache: KeyValueCache<string, CO>;
   private httpFetch: Fetcher;
 
   constructor(
-    keyValueCache: KeyValueCache = new InMemoryLRUCache(),
+    keyValueCache: KeyValueCache = new InMemoryLRUCache<string, CO>(),
     httpFetch: Fetcher = nodeFetch,
   ) {
     this.keyValueCache = new PrefixingKeyValueCache(
@@ -57,12 +57,12 @@ export class HTTPCache {
     cache?: {
       cacheKey?: string;
       cacheOptions?:
-        | CacheOptions
+        | CO
         | ((
             url: string,
             response: FetcherResponse,
             request: RequestOptions,
-          ) => ValueOrPromise<CacheOptions | undefined>);
+          ) => ValueOrPromise<CO | undefined>);
       httpCacheSemanticsCachePolicyOptions?: HttpCacheSemanticsOptions;
     },
   ): Promise<ResponseWithCacheWritePromise> {
@@ -189,12 +189,12 @@ export class HTTPCache {
     policy: SneakyCachePolicy,
     cacheKey: string,
     cacheOptions?:
-      | CacheOptions
+      | CO
       | ((
           url: string,
           response: FetcherResponse,
           request: RequestOptions,
-        ) => ValueOrPromise<CacheOptions | undefined>),
+        ) => ValueOrPromise<CO | undefined>),
   ): Promise<ResponseWithCacheWritePromise> {
     if (typeof cacheOptions === 'function') {
       cacheOptions = await cacheOptions(url, response, request);
@@ -264,7 +264,7 @@ export class HTTPCache {
   }: {
     response: FetcherResponse;
     policy: CachePolicy;
-    cacheOptions?: CacheOptions;
+    cacheOptions?: CO;
     ttl: number | null | undefined;
     ttlOverride: number | undefined;
     cacheKey: string;
@@ -278,9 +278,9 @@ export class HTTPCache {
 
     // Set the value into the cache, and forward all the set cache option into the setter function
     await this.keyValueCache.set(cacheKey, entry, {
-      ...(cacheOptions ?? {}),
+      ...cacheOptions,
       ttl,
-    });
+    } as CO);
   }
 }
 

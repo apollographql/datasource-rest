@@ -16,6 +16,10 @@ import type { WithRequired } from '@apollo/utils.withrequired';
 import { Headers as NodeFetchHeaders } from 'node-fetch';
 import type { Logger } from '@apollo/utils.logger';
 
+interface CustomCacheOptions extends CacheOptions {
+  tags?: string[];
+}
+
 const apiUrl = 'https://api.example.com';
 
 describe('RESTDataSource', () => {
@@ -1776,6 +1780,33 @@ describe('RESTDataSource', () => {
         const { httpCache } = await dataSource.getFoo(1);
         expect(httpCache.cacheWritePromise).toBeDefined();
         await httpCache.cacheWritePromise;
+
+        // Call a second time which should be cached
+        await dataSource.getFoo(1);
+      });
+
+      it('allows setting custom cache options for each request', async () => {
+        const dataSource =
+          new (class extends RESTDataSource<CustomCacheOptions> {
+            override baseURL = 'https://api.example.com';
+
+            getFoo(id: number) {
+              return this.fetch(`foo/${id}`, {
+                cacheOptions: { ttl: 1000000, tags: ['foo', 'bar'] },
+              });
+            }
+          })();
+
+        const spyOnHttpFetch = jest.spyOn(dataSource['httpCache'], 'fetch');
+
+        nock(apiUrl).get('/foo/1').reply(200);
+        const { httpCache } = await dataSource.getFoo(1);
+        expect(httpCache.cacheWritePromise).toBeDefined();
+        await httpCache.cacheWritePromise;
+        expect(spyOnHttpFetch.mock.calls[0][2]).toEqual({
+          cacheKey: 'GET https://api.example.com/foo/1',
+          cacheOptions: { ttl: 1000000, tags: ['foo', 'bar'] },
+        });
 
         // Call a second time which should be cached
         await dataSource.getFoo(1);

@@ -5,6 +5,10 @@ import type { CacheOptions } from '../RESTDataSource';
 import { nockAfterEach, nockBeforeEach } from './nockAssertions';
 import { FakeableTTLTestingCache } from './FakeableTTLTestingCache';
 
+interface CustomCacheOptions extends CacheOptions {
+  tags?: string[];
+}
+
 describe('HTTPCache', () => {
   let store: FakeableTTLTestingCache;
   let httpCache: HTTPCache;
@@ -415,14 +419,15 @@ describe('HTTPCache', () => {
 
     const storeSet = jest.spyOn(store, 'set');
 
-    const { cacheWritePromise } = await httpCache.fetch(
+    const customHttpCache = new HTTPCache<CustomCacheOptions>(store, fetch);
+    const { cacheWritePromise } = await customHttpCache.fetch(
       adaUrl,
       {},
       {
         cacheOptions: {
           ttl: 20,
           tags: ['foo', 'bar'],
-        } as unknown as CacheOptions,
+        },
       },
     );
     await cacheWritePromise;
