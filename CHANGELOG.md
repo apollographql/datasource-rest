@@ -1,5 +1,21 @@
 # @apollo/datasource-rest
 
+## 6.1.1
+
+### Patch Changes
+
+- [#246](https://github.com/apollographql/datasource-rest/pull/246) [`c6ac292`](https://github.com/apollographql/datasource-rest/commit/c6ac29203416e6a91387ab16c6f578b201f22a1b) Thanks [@lotmek](https://github.com/lotmek)! - Make `request` and `url` optional parameters in the `errorFromResponse` method and clean up the implementation.
+
+## 6.1.0
+
+### Minor Changes
+
+- [#242](https://github.com/apollographql/datasource-rest/pull/242) [`dfb8bcc`](https://github.com/apollographql/datasource-rest/commit/dfb8bccce5e26247e7d5f9428eb1ca8d5dfaef08) Thanks [@trevor-scheer](https://github.com/trevor-scheer)! - Add optional `url` parameter to `didEncounterErrors` hook
+
+  In previous versions of `RESTDataSource`, the URL of the request was available on the `Request` object passed in to the hook. The `Request` object is no longer passed as an argument, so this restores the availability of the `url` to the hook.
+
+  This is optional for now in order to keep this change forward compatible for existing `this.didEncounterErrors` call sites in userland code. In the next major version, this might become a required parameter.
+
 ## 6.0.1
 
 ### Patch Changes
