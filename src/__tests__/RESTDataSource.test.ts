@@ -16,10 +16,6 @@ import type { WithRequired } from '@apollo/utils.withrequired';
 import { Headers as NodeFetchHeaders } from 'node-fetch';
 import type { Logger } from '@apollo/utils.logger';
 
-interface CustomCacheOptions extends CacheOptions {
-  tags?: string[];
-}
-
 const apiUrl = 'https://api.example.com';
 
 describe('RESTDataSource', () => {
@@ -1786,6 +1782,10 @@ describe('RESTDataSource', () => {
       });
 
       it('allows setting custom cache options for each request', async () => {
+        interface CustomCacheOptions extends CacheOptions {
+          tags?: string[];
+        }
+
         const dataSource =
           new (class extends RESTDataSource<CustomCacheOptions> {
             override baseURL = 'https://api.example.com';
