@@ -54,7 +54,7 @@
   },
   "dependencies": {
     "@apollo/utils.fetcher": "^3.0.0",
-    "@apollo/utils.keyvaluecache": "^3.0.0",
+    "@apollo/utils.keyvaluecache": "^3.1.0",
     "@apollo/utils.logger": "^3.0.0",
     "@apollo/utils.withrequired": "^3.0.0",
     "@types/http-cache-semantics": "^4.0.1",

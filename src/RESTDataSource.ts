@@ -13,83 +13,95 @@ import type { Options as HttpCacheSemanticsOptions } from 'http-cache-semantics'
 
 export type ValueOrPromise<T> = T | Promise<T>;
 
-export type RequestOptions = FetcherRequestInit & {
-  /**
-   * URL search parameters can be provided either as a record object (in which
-   * case keys with `undefined` values are ignored) or as an URLSearchParams
-   * object. If you want to specify a parameter multiple times, use
-   * URLSearchParams with its "array of two-element arrays" constructor form.
-   * (The URLSearchParams object is globally available in Node, and provided to
-   * TypeScript by @types/node.)
-   */
-  params?: Record<string, string | undefined> | URLSearchParams;
-  /**
-   * The default implementation of `cacheKeyFor` returns this value if it is
-   * provided. This is used both as part of the request deduplication key and as
-   * the key in the shared HTTP-header-sensitive cache.
-   */
-  cacheKey?: string;
-  /**
-   * This can be a `CacheOptions` object or a (possibly async) function
-   * returning such an object. The details of what its fields mean are
-   * documented under `CacheOptions`. The function is called after a real HTTP
-   * request is made (and is not called if a response from the cache can be
-   * returned). If this is provided, the `cacheOptionsFor` hook is not called.
-   */
-  cacheOptions?:
-    | CacheOptions
-    | ((
-        url: string,
-        response: FetcherResponse,
-        request: RequestOptions,
-      ) => Promise<CacheOptions | undefined>);
-  /**
-   * If provided, this is passed through as the third argument to `new
-   * CachePolicy()` from the `http-cache-semantics` npm package as part of the
-   * HTTP-header-sensitive cache.
-   */
-  httpCacheSemanticsCachePolicyOptions?: HttpCacheSemanticsOptions;
-};
+export type RequestOptions<CO extends CacheOptions = CacheOptions> =
+  FetcherRequestInit & {
+    /**
+     * URL search parameters can be provided either as a record object (in which
+     * case keys with `undefined` values are ignored) or as an URLSearchParams
+     * object. If you want to specify a parameter multiple times, use
+     * URLSearchParams with its "array of two-element arrays" constructor form.
+     * (The URLSearchParams object is globally available in Node, and provided to
+     * TypeScript by @types/node.)
+     */
+    params?: Record<string, string | undefined> | URLSearchParams;
+    /**
+     * The default implementation of `cacheKeyFor` returns this value if it is
+     * provided. This is used both as part of the request deduplication key and as
+     * the key in the shared HTTP-header-sensitive cache.
+     */
+    cacheKey?: string;
+    /**
+     * This can be a `CacheOptions` object or a (possibly async) function
+     * returning such an object. The details of what its fields mean are
+     * documented under `CacheOptions`. The function is called after a real HTTP
+     * request is made (and is not called if a response from the cache can be
+     * returned). If this is provided, the `cacheOptionsFor` hook is not called.
+     */
+    cacheOptions?:
+      | CO
+      | ((
+          url: string,
+          response: FetcherResponse,
+          request: RequestOptions,
+        ) => Promise<CO | undefined>);
+    /**
+     * If provided, this is passed through as the third argument to `new
+     * CachePolicy()` from the `http-cache-semantics` npm package as part of the
+     * HTTP-header-sensitive cache.
+     */
+    httpCacheSemanticsCachePolicyOptions?: HttpCacheSemanticsOptions;
+  };
 
-export interface HeadRequest extends RequestOptions {
+export interface HeadRequest<CO extends CacheOptions = CacheOptions>
+  extends RequestOptions<CO> {
   method?: 'HEAD';
   body?: never;
 }
 
-export interface GetRequest extends RequestOptions {
+export interface GetRequest<CO extends CacheOptions = CacheOptions>
+  extends RequestOptions<CO> {
   method?: 'GET';
   body?: never;
 }
 
-interface WithBody extends Omit<RequestOptions, 'body'> {
+interface WithBody<CO extends CacheOptions = CacheOptions>
+  extends Omit<RequestOptions<CO>, 'body'> {
   body?: FetcherRequestInit['body'] | object;
 }
 
-export interface PostRequest extends WithBody {
+export interface PostRequest<CO extends CacheOptions = CacheOptions>
+  extends WithBody<CO> {
   method?: 'POST';
 }
 
-export interface PutRequest extends WithBody {
+export interface PutRequest<CO extends CacheOptions = CacheOptions>
+  extends WithBody<CO> {
   method?: 'PUT';
 }
 
-export interface PatchRequest extends WithBody {
+export interface PatchRequest<CO extends CacheOptions = CacheOptions>
+  extends WithBody<CO> {
   method?: 'PATCH';
 }
 
-export interface DeleteRequest extends WithBody {
+export interface DeleteRequest<CO extends CacheOptions = CacheOptions>
+  extends WithBody<CO> {
   method?: 'DELETE';
 }
 
-export type RequestWithoutBody = HeadRequest | GetRequest;
+export type RequestWithoutBody<CO extends CacheOptions = CacheOptions> =
+  | HeadRequest<CO>
+  | GetRequest<CO>;
 
-export type RequestWithBody =
-  | PostRequest
-  | PutRequest
-  | PatchRequest
-  | DeleteRequest;
+export type RequestWithBody<CO extends CacheOptions = CacheOptions> =
+  | PostRequest<CO>
+  | PutRequest<CO>
+  | PatchRequest<CO>
+  | DeleteRequest<CO>;
 
-export type DataSourceRequest = RequestWithoutBody | RequestWithBody;
+export type DataSourceRequest<CO extends CacheOptions = CacheOptions> =
+  | RequestWithoutBody<CO>
+  | RequestWithBody<CO>;
 
 // While tempting, this union can't be reduced / factored out to just
 // Omit<WithRequired<RequestWithBody | RequestWithBody, 'headers'>, 'params'> & { params: URLSearchParams }
@@ -99,9 +111,9 @@ export type DataSourceRequest = RequestWithoutBody | RequestWithBody;
  * hooks to ensure that headers and params are always present, even if they're
  * empty.
  */
-export type AugmentedRequest = (
-  | Omit<WithRequired<RequestWithoutBody, 'headers'>, 'params'>
-  | Omit<WithRequired<RequestWithBody, 'headers'>, 'params'>
+export type AugmentedRequest<CO extends CacheOptions = CacheOptions> = (
+  | Omit<WithRequired<RequestWithoutBody<CO>, 'headers'>, 'params'>
+  | Omit<WithRequired<RequestWithBody<CO>, 'headers'>, 'params'>
 ) & {
   params: URLSearchParams;
 };
@@ -173,14 +185,14 @@ export type RequestDeduplicationPolicy =
   // the deduplication store.)
   | { policy: 'do-not-deduplicate'; invalidateDeduplicationKeys?: string[] };
 
-export abstract class RESTDataSource {
-  protected httpCache: HTTPCache;
+export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
+  protected httpCache: HTTPCache<CO>;
   protected deduplicationPromises = new Map<string, Promise<any>>();
   baseURL?: string;
   logger: Logger;
 
   constructor(config?: DataSourceConfig) {
-    this.httpCache = new HTTPCache(config?.cache, config?.fetch);
+    this.httpCache = new HTTPCache<CO>(config?.cache, config?.fetch);
     this.logger = config?.logger ?? console;
   }
 
@@ -259,7 +271,7 @@ export abstract class RESTDataSource {
     url: string,
     response: FetcherResponse,
     request: FetcherRequestInit,
-  ): ValueOrPromise<CacheOptions | undefined>;
+  ): ValueOrPromise<CO | undefined>;
 
   protected didEncounterError(
     _error: Error,
@@ -382,14 +394,14 @@ export abstract class RESTDataSource {
 
   protected async head(
     path: string,
-    request?: HeadRequest,
+    request?: HeadRequest<CO>,
   ): Promise<FetcherResponse> {
     return (await this.fetch(path, { method: 'HEAD', ...request })).response;
   }
 
   protected async get<TResult = any>(
     path: string,
-    request?: GetRequest,
+    request?: GetRequest<CO>,
   ): Promise<TResult> {
     return (
       await this.fetch<TResult>(path, {
@@ -401,7 +413,7 @@ export abstract class RESTDataSource {
 
   protected async post<TResult = any>(
     path: string,
-    request?: PostRequest,
+    request?: PostRequest<CO>,
   ): Promise<TResult> {
     return (
       await this.fetch<TResult>(path, {
@@ -413,7 +425,7 @@ export abstract class RESTDataSource {
 
   protected async patch<TResult = any>(
     path: string,
-    request?: PatchRequest,
+    request?: PatchRequest<CO>,
   ): Promise<TResult> {
     return (
       await this.fetch<TResult>(path, {
@@ -425,7 +437,7 @@ export abstract class RESTDataSource {
 
   protected async put<TResult = any>(
     path: string,
-    request?: PutRequest,
+    request?: PutRequest<CO>,
   ): Promise<TResult> {
     return (
       await this.fetch<TResult>(path, {
@@ -437,7 +449,7 @@ export abstract class RESTDataSource {
 
   protected async delete<TResult = any>(
     path: string,
-    request?: DeleteRequest,
+    request?: DeleteRequest<CO>,
   ): Promise<TResult> {
     return (
       await this.fetch<TResult>(path, {
@@ -463,7 +475,7 @@ export abstract class RESTDataSource {
 
   public async fetch<TResult>(
     path: string,
-    incomingRequest: DataSourceRequest = {},
+    incomingRequest: DataSourceRequest<CO> = {},
   ): Promise<DataSourceFetchResult<TResult>> {
     const downcasedHeaders: Record<string, string> = {};
     if (incomingRequest.headers) {
@@ -508,7 +520,7 @@ export abstract class RESTDataSource {
     // At this point we know the `body` is a `string`, `Buffer`, or `undefined`
     // (not possibly an `object`).
     const outgoingRequest = augmentedRequest as WithRequired<
-      RequestOptions,
+      RequestOptions<CO>,
       'method'
     >;
 
