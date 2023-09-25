@@ -1,5 +1,11 @@
 # @apollo/datasource-rest
 
+## 6.2.1
+
+### Patch Changes
+
+- [`d31d275`](https://github.com/apollographql/datasource-rest/commit/d31d275758fe64c8950c137b24d377c59eb71fae) Thanks [@trevor-scheer](https://github.com/trevor-scheer)! - Export `RequestDeduplicationPolicy` type
+
 ## 6.2.0
 
 ### Minor Changes
