@@ -14,4 +14,5 @@ export {
   RequestWithBody,
   DataSourceRequest,
   CacheOptions,
+  RequestDeduplicationPolicy,
 } from './RESTDataSource';
