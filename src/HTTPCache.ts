@@ -61,7 +61,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
         | ((
             url: string,
             response: FetcherResponse,
-            request: RequestOptions,
+            request: RequestOptions<CO>,
           ) => ValueOrPromise<CO | undefined>);
       httpCacheSemanticsCachePolicyOptions?: HttpCacheSemanticsOptions;
     },
@@ -86,7 +86,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
       const response = await this.httpFetch(urlString, requestOpts);
 
       const policy = new CachePolicy(
-        policyRequestFrom(urlString, requestOpts),
+        policyRequestFrom<CO>(urlString, requestOpts),
         policyResponseFrom(response),
         cache?.httpCacheSemanticsCachePolicyOptions,
       ) as SneakyCachePolicy;
@@ -148,7 +148,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
       const revalidationHeaders = policy.revalidationHeaders(
         policyRequestFrom(urlString, requestOpts),
       );
-      const revalidationRequest: RequestOptions = {
+      const revalidationRequest: RequestOptions<CO> = {
         ...requestOpts,
         headers: cachePolicyHeadersToFetcherHeadersInit(revalidationHeaders),
       };
@@ -185,7 +185,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
   private async storeResponseAndReturnClone(
     url: string,
     response: FetcherResponse,
-    request: RequestOptions,
+    request: RequestOptions<CO>,
     policy: SneakyCachePolicy,
     cacheKey: string,
     cacheOptions?:
@@ -193,7 +193,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
       | ((
           url: string,
           response: FetcherResponse,
-          request: RequestOptions,
+          request: RequestOptions<CO>,
         ) => ValueOrPromise<CO | undefined>),
   ): Promise<ResponseWithCacheWritePromise> {
     if (typeof cacheOptions === 'function') {
@@ -288,7 +288,10 @@ function canBeRevalidated(response: FetcherResponse): boolean {
   return response.headers.has('ETag') || response.headers.has('Last-Modified');
 }
 
-function policyRequestFrom(url: string, request: RequestOptions) {
+function policyRequestFrom<CO extends CacheOptions = CacheOptions>(
+  url: string,
+  request: RequestOptions<CO>,
+) {
   return {
     url,
     method: request.method ?? 'GET',
