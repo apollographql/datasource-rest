@@ -4,12 +4,13 @@ import type {
   FetcherResponse,
 } from '@apollo/utils.fetcher';
 import type { KeyValueCache } from '@apollo/utils.keyvaluecache';
+import type { Logger } from '@apollo/utils.logger';
 import type { WithRequired } from '@apollo/utils.withrequired';
 import { GraphQLError } from 'graphql';
+import type { Options as HttpCacheSemanticsOptions } from 'http-cache-semantics';
+import cloneDeep from 'lodash.clonedeep';
 import isPlainObject from 'lodash.isplainobject';
 import { HTTPCache } from './HTTPCache';
-import type { Logger } from '@apollo/utils.logger';
-import type { Options as HttpCacheSemanticsOptions } from 'http-cache-semantics';
 
 export type ValueOrPromise<T> = T | Promise<T>;
 
@@ -326,11 +327,7 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
   }
 
   protected cloneParsedBody<TResult>(parsedBody: TResult) {
-    if (typeof parsedBody === 'string') {
-      return parsedBody;
-    } else {
-      return JSON.parse(JSON.stringify(parsedBody));
-    }
+    return cloneDeep(parsedBody);
   }
 
   protected shouldJSONSerializeBody(body: RequestWithBody['body']): boolean {
