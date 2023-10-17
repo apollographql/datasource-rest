@@ -327,7 +327,7 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
   }
 
   protected cloneParsedBody<TResult>(parsedBody: TResult) {
-    // consider using `structuredClone()` when we drop support for Node 16 
+    // consider using `structuredClone()` when we drop support for Node 16
     return cloneDeep(parsedBody);
   }
 
