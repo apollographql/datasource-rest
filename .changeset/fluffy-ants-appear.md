@@ -1,5 +1,5 @@
 ---
-'@apollo/datasource-rest': minor
+'@apollo/datasource-rest': patch
 ---
 
-use lodash to clone parsed body
+Use lodash's `cloneDeep` to clone parsed body instead of `JSON.parse(JSON.stringify(...))`
