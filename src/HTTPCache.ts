@@ -5,11 +5,7 @@ import nodeFetch, {
 } from 'node-fetch';
 import CachePolicy from 'http-cache-semantics';
 import type { Options as HttpCacheSemanticsOptions } from 'http-cache-semantics';
-import type {
-  Fetcher,
-  FetcherResponse,
-  FetcherRequestInit,
-} from '@apollo/utils.fetcher';
+import type { Fetcher, FetcherResponse } from '@apollo/utils.fetcher';
 import {
   type KeyValueCache,
   InMemoryLRUCache,
@@ -53,7 +49,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
 
   async fetch(
     url: URL,
-    requestOpts: FetcherRequestInit = {},
+    requestOpts: RequestOptions<CO> = {},
     cache?: {
       cacheKey?: string;
       cacheOptions?:
@@ -148,7 +144,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
       const revalidationHeaders = policy.revalidationHeaders(
         policyRequestFrom<CO>(urlString, requestOpts),
       );
-      const revalidationRequest: RequestOptions<CO> = {
+      const revalidationRequest = {
         ...requestOpts,
         headers: cachePolicyHeadersToFetcherHeadersInit(revalidationHeaders),
       };
