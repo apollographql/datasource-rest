@@ -1,5 +1,14 @@
 # @apollo/datasource-rest
 
+## 6.2.2
+
+### Patch Changes
+
+- [#270](https://github.com/apollographql/datasource-rest/pull/270) [`f6cf377`](https://github.com/apollographql/datasource-rest/commit/f6cf377e97b609e829709a0ba9eff7d9294c5e31) Thanks [@Sean-Y-X](https://github.com/Sean-Y-X)! - Use lodash's `cloneDeep` to clone parsed body instead of `JSON.parse(JSON.stringify(...))`
+
+- [#268](https://github.com/apollographql/datasource-rest/pull/268) [`870ba80`](https://github.com/apollographql/datasource-rest/commit/870ba800da56dd31ba4274cc33de4400286e4507) Thanks [@HishamAli81](https://github.com/HishamAli81)! - \* Fix RequestOptions.cacheOptions function return type to also return a non-promise value.
+  - Fix propagation of the cache options generic type `RequestOptions` and `AugmentedRequest`.
+
 ## 6.2.1
 
 ### Patch Changes
