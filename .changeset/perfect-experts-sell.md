@@ -1,5 +1,5 @@
 ---
-'@apollo/datasource-rest': minor
+'@apollo/datasource-rest': patch
 ---
 
 * Fix RequestOptions.cacheOptions function return type to also return a non-promise value.
