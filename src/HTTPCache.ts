@@ -82,7 +82,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
       const response = await this.httpFetch(urlString, requestOpts);
 
       const policy = new CachePolicy(
-        policyRequestFrom<CO>(urlString, requestOpts),
+        policyRequestFrom(urlString, requestOpts),
         policyResponseFrom(response),
         cache?.httpCacheSemanticsCachePolicyOptions,
       ) as SneakyCachePolicy;
@@ -110,7 +110,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
       (ttlOverride && policy.age() < ttlOverride) ||
       (!ttlOverride &&
         policy.satisfiesWithoutRevalidation(
-          policyRequestFrom<CO>(urlString, requestOpts),
+          policyRequestFrom(urlString, requestOpts),
         ))
     ) {
       // Either the cache entry was created with an explicit TTL override (ie,
@@ -142,7 +142,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
       // still re-write to the cache, because we might need to update the TTL or
       // other aspects of the cache policy based on the headers we got back.
       const revalidationHeaders = policy.revalidationHeaders(
-        policyRequestFrom<CO>(urlString, requestOpts),
+        policyRequestFrom(urlString, requestOpts),
       );
       const revalidationRequest = {
         ...requestOpts,
@@ -154,7 +154,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
       );
 
       const { policy: revalidatedPolicy, modified } = policy.revalidatedPolicy(
-        policyRequestFrom<CO>(urlString, revalidationRequest),
+        policyRequestFrom(urlString, revalidationRequest),
         policyResponseFrom(revalidationResponse),
       ) as unknown as { policy: SneakyCachePolicy; modified: boolean };
 
