@@ -43,8 +43,8 @@ export type RequestOptions<CO extends CacheOptions = CacheOptions> =
       | ((
           url: string,
           response: FetcherResponse,
-          request: RequestOptions,
-        ) => Promise<CO | undefined>);
+          request: RequestOptions<CO>,
+        ) => ValueOrPromise<CO | undefined>);
     /**
      * If provided, this is passed through as the third argument to `new
      * CachePolicy()` from the `http-cache-semantics` npm package as part of the
@@ -205,7 +205,7 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
   // won't return a cache entry whose Vary-ed header field doesn't match, new
   // responses can overwrite old ones with different Vary-ed header fields if
   // you don't take the header into account in the cache key.
-  protected cacheKeyFor(url: URL, request: RequestOptions): string {
+  protected cacheKeyFor(url: URL, request: RequestOptions<CO>): string {
     return request.cacheKey ?? `${request.method ?? 'GET'} ${url}`;
   }
 
@@ -227,7 +227,7 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
    */
   protected requestDeduplicationPolicyFor(
     url: URL,
-    request: RequestOptions,
+    request: RequestOptions<CO>,
   ): RequestDeduplicationPolicy {
     const method = request.method ?? 'GET';
     // Start with the cache key that is used for the shared header-sensitive
@@ -258,12 +258,12 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
 
   protected willSendRequest?(
     path: string,
-    requestOpts: AugmentedRequest,
+    requestOpts: AugmentedRequest<CO>,
   ): ValueOrPromise<void>;
 
   protected resolveURL(
     path: string,
-    _request: AugmentedRequest,
+    _request: AugmentedRequest<CO>,
   ): ValueOrPromise<URL> {
     return new URL(path, this.baseURL);
   }
@@ -276,7 +276,7 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
 
   protected didEncounterError(
     _error: Error,
-    _request: RequestOptions,
+    _request: RequestOptions<CO>,
     // TODO(v7): this shouldn't be optional in a future major version
     _url?: URL,
   ) {
@@ -331,7 +331,9 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
     return cloneDeep(parsedBody);
   }
 
-  protected shouldJSONSerializeBody(body: RequestWithBody['body']): boolean {
+  protected shouldJSONSerializeBody(
+    body: RequestWithBody<CO>['body'],
+  ): boolean {
     return !!(
       // We accept arbitrary objects and arrays as body and serialize them as JSON.
       (
@@ -352,7 +354,7 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
 
   protected async throwIfResponseIsError(options: {
     url: URL;
-    request: RequestOptions;
+    request: RequestOptions<CO>;
     response: FetcherResponse;
     parsedBody: unknown;
   }) {
@@ -367,7 +369,7 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
     parsedBody,
   }: {
     url?: URL;
-    request?: RequestOptions;
+    request?: RequestOptions<CO>;
     response: FetcherResponse;
     parsedBody: unknown;
   }) {
@@ -483,7 +485,7 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
       });
     }
 
-    const augmentedRequest: AugmentedRequest = {
+    const augmentedRequest: AugmentedRequest<CO> = {
       ...incomingRequest,
       // guarantee params and headers objects before calling `willSendRequest` for convenience
       params:
@@ -632,7 +634,7 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
 
   protected async trace<TResult>(
     url: URL,
-    request: RequestOptions,
+    request: RequestOptions<CO>,
     fn: () => Promise<TResult>,
   ): Promise<TResult> {
     if (NODE_ENV === 'development') {

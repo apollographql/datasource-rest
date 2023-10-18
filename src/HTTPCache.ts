@@ -5,11 +5,7 @@ import nodeFetch, {
 } from 'node-fetch';
 import CachePolicy from 'http-cache-semantics';
 import type { Options as HttpCacheSemanticsOptions } from 'http-cache-semantics';
-import type {
-  Fetcher,
-  FetcherResponse,
-  FetcherRequestInit,
-} from '@apollo/utils.fetcher';
+import type { Fetcher, FetcherResponse } from '@apollo/utils.fetcher';
 import {
   type KeyValueCache,
   InMemoryLRUCache,
@@ -53,7 +49,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
 
   async fetch(
     url: URL,
-    requestOpts: FetcherRequestInit = {},
+    requestOpts: RequestOptions<CO> = {},
     cache?: {
       cacheKey?: string;
       cacheOptions?:
@@ -61,7 +57,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
         | ((
             url: string,
             response: FetcherResponse,
-            request: RequestOptions,
+            request: RequestOptions<CO>,
           ) => ValueOrPromise<CO | undefined>);
       httpCacheSemanticsCachePolicyOptions?: HttpCacheSemanticsOptions;
     },
@@ -148,7 +144,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
       const revalidationHeaders = policy.revalidationHeaders(
         policyRequestFrom(urlString, requestOpts),
       );
-      const revalidationRequest: RequestOptions = {
+      const revalidationRequest = {
         ...requestOpts,
         headers: cachePolicyHeadersToFetcherHeadersInit(revalidationHeaders),
       };
@@ -185,7 +181,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
   private async storeResponseAndReturnClone(
     url: string,
     response: FetcherResponse,
-    request: RequestOptions,
+    request: RequestOptions<CO>,
     policy: SneakyCachePolicy,
     cacheKey: string,
     cacheOptions?:
@@ -193,7 +189,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
       | ((
           url: string,
           response: FetcherResponse,
-          request: RequestOptions,
+          request: RequestOptions<CO>,
         ) => ValueOrPromise<CO | undefined>),
   ): Promise<ResponseWithCacheWritePromise> {
     if (typeof cacheOptions === 'function') {
@@ -288,7 +284,10 @@ function canBeRevalidated(response: FetcherResponse): boolean {
   return response.headers.has('ETag') || response.headers.has('Last-Modified');
 }
 
-function policyRequestFrom(url: string, request: RequestOptions) {
+function policyRequestFrom<CO extends CacheOptions = CacheOptions>(
+  url: string,
+  request: RequestOptions<CO>,
+) {
   return {
     url,
     method: request.method ?? 'GET',
