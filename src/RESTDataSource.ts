@@ -209,6 +209,10 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
     return request.cacheKey ?? `${request.method ?? 'GET'} ${url}`;
   }
 
+  protected modifyRequestForCacheMiss = ( request: RequestOptions<CO>): RequestOptions<CO> => {
+    return request;
+  }
+
   /**
    * Calculates the deduplication policy for the request.
    *
@@ -519,7 +523,7 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
 
     // At this point we know the `body` is a `string`, `Buffer`, or `undefined`
     // (not possibly an `object`).
-    const outgoingRequest = augmentedRequest as WithRequired<
+    let outgoingRequest = augmentedRequest as WithRequired<
       RequestOptions<CO>,
       'method'
     >;
@@ -531,6 +535,12 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
           ? outgoingRequest.cacheOptions
           : this.cacheOptionsFor?.bind(this);
         try {
+          const isInCache = await this.httpCache.isInCache(cacheKey);
+
+          if (!isInCache) {
+            outgoingRequest = this.modifyRequestForCacheMiss(outgoingRequest);
+          }
+
           const { response, cacheWritePromise } = await this.httpCache.fetch(
             url,
             outgoingRequest,

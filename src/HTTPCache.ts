@@ -47,6 +47,14 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
     this.httpFetch = httpFetch;
   }
 
+  async isInCache(cacheKey: string) {
+    const entry = await this.keyValueCache.get(cacheKey);
+
+    if (entry) {
+      return true;
+    }
+  }
+
   async fetch(
     url: URL,
     requestOpts: RequestOptions<CO> = {},
