@@ -38,7 +38,7 @@
     "@types/jest": "29.5.11",
     "@types/lodash.clonedeep": "4.5.9",
     "@types/lodash.isplainobject": "4.0.9",
-    "@types/node": "16.18.69",
+    "@types/node": "16.18.70",
     "@typescript-eslint/eslint-plugin": "6.18.0",
     "@typescript-eslint/parser": "6.18.0",
     "cspell": "8.3.2",
