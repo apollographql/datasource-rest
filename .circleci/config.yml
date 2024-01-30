@@ -26,7 +26,7 @@ commands:
       - when:
           condition: << parameters.node-version >>
           steps:
-          - run: volta pin node@<< parameters.node-version >>
+            - run: volta pin node@<< parameters.node-version >>
       - run: node --version
       - run: npm --version
       - node/install-packages
@@ -37,7 +37,7 @@ jobs:
       node-version:
         type: string
     docker:
-    - image: cimg/base:stable
+      - image: cimg/base:stable
     steps:
       - setup-node:
           node-version: <<parameters.node-version>>
@@ -47,21 +47,21 @@ jobs:
 
   Prettier:
     docker:
-    - image: cimg/base:stable
+      - image: cimg/base:stable
     steps:
       - setup-node
       - run: npm run prettier-check
 
   Lint:
     docker:
-    - image: cimg/base:stable
+      - image: cimg/base:stable
     steps:
       - setup-node
       - run: npm run lint
 
   Spell Check:
     docker:
-    - image: cimg/base:stable
+      - image: cimg/base:stable
     steps:
       - setup-node
       - run: npm run spell-check
@@ -73,7 +73,7 @@ jobs:
   # themselves.
   Changesets:
     docker:
-    - image: cimg/base:stable
+      - image: cimg/base:stable
     steps:
       - run: echo Ensure there is at least one step
       - unless:
@@ -110,3 +110,8 @@ workflows:
             - secops-oidc
           git-base-revision: <<#pipeline.git.base_revision>><<pipeline.git.base_revision>><</pipeline.git.base_revision >>
           git-revision: << pipeline.git.revision >>
+      - secops/semgrep:
+          context:
+            - secops-oidc
+            - github-orb
+          git-base-revision: <<#pipeline.git.base_revision>><<pipeline.git.base_revision>><</pipeline.git.base_revision >>
