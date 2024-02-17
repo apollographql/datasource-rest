@@ -38,7 +38,7 @@
     "@types/jest": "29.5.12",
     "@types/lodash.clonedeep": "4.5.9",
     "@types/lodash.isplainobject": "4.0.9",
-    "@types/node": "16.18.80",
+    "@types/node": "16.18.82",
     "@typescript-eslint/eslint-plugin": "6.21.0",
     "@typescript-eslint/parser": "6.21.0",
     "cspell": "8.3.2",
@@ -68,7 +68,7 @@
     "graphql": "^16.5.0"
   },
   "volta": {
-    "node": "20.11.0",
+    "node": "20.11.1",
     "npm": "10.4.0"
   }
 }
