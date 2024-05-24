@@ -130,6 +130,36 @@ describe('HTTPCache', () => {
       expect(response.headers.get('age')).toEqual('10');
     });
 
+    it('fetches fresh response when TTL not expired but skipCache true', async () => {
+      mockGetAdaLovelace({
+        'cache-control': 'private, no-cache',
+        'set-cookie': 'foo',
+      });
+
+      const { cacheWritePromise } = await httpCache.fetch(
+        adaUrl,
+        {},
+        {
+          cacheOptions: {
+            ttl: 30,
+          },
+        },
+      );
+
+      await cacheWritePromise;
+      jest.advanceTimersByTime(10000);
+
+      mockGetAlanTuring({
+        'cache-control': 'private, no-cache',
+        'set-cookie': 'foo',
+      });
+
+      const { response } = await httpCache.fetch(adaUrl, { skipCache: true });
+
+      expect(await response.json()).toEqual({ name: 'Alan Turing' });
+      expect(response.headers.get('age')).toBeNull();
+    });
+
     it('fetches a fresh response from the origin when the overridden TTL expired', async () => {
       mockGetAdaLovelace({
         'cache-control': 'private, no-cache',
