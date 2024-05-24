@@ -75,7 +75,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
       return { response: await this.httpFetch(urlString, requestOpts) };
     }
 
-    const entry = await this.keyValueCache.get(cacheKey);
+    const entry = requestOpts.skipCache !== true ? await this.keyValueCache.get(cacheKey) : undefined;
     if (!entry) {
       // There's nothing in our cache. Fetch the URL and save it to the cache if
       // we're allowed.
