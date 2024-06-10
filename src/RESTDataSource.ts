@@ -46,6 +46,11 @@ export type RequestOptions<CO extends CacheOptions = CacheOptions> =
           request: RequestOptions<CO>,
         ) => ValueOrPromise<CO | undefined>);
     /**
+     * Do not check the cache ignoring TTL or other cache settings
+     * Useful when you suspect a value may be cached but you want to force fresh data
+     */
+    skipCache?: boolean;
+    /**
      * If provided, this is passed through as the third argument to `new
      * CachePolicy()` from the `http-cache-semantics` npm package as part of the
      * HTTP-header-sensitive cache.
