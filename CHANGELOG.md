@@ -1,5 +1,11 @@
 # @apollo/datasource-rest
 
+## 6.3.0
+
+### Minor Changes
+
+- [#332](https://github.com/apollographql/datasource-rest/pull/332) [`8a4578d`](https://github.com/apollographql/datasource-rest/commit/8a4578dac57450770f606ddd4aea293dd480ddf1) Thanks [@nmrj](https://github.com/nmrj)! - Allow cache to be skipped on RestDataSource HTTP requests
+
 ## 6.2.2
 
 ### Patch Changes
