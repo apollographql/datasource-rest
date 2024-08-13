@@ -30,6 +30,18 @@ interface SneakyCachePolicy extends CachePolicy {
 interface ResponseWithCacheWritePromise {
   response: FetcherResponse;
   cacheWritePromise?: Promise<void>;
+  metrics: Metrics;
+}
+
+export interface Metrics {
+  // True if a revalidation request was done.
+  revalidated: boolean;
+  // True if the response came from the cache.
+  fromCache: boolean;
+  // How long the response will be cached in milliseconds when it didn't come from the cache.
+  timeToLive?: number;
+  // How long the response has been cached when it did come from the cache.
+  age?: number;
 }
 
 export class HTTPCache<CO extends CacheOptions = CacheOptions> {
@@ -62,9 +74,11 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
       httpCacheSemanticsCachePolicyOptions?: HttpCacheSemanticsOptions;
     },
   ): Promise<ResponseWithCacheWritePromise> {
+    const metrics: Metrics = { fromCache: false, revalidated: false, };
     const urlString = url.toString();
     requestOpts.method = requestOpts.method ?? 'GET';
     const cacheKey = cache?.cacheKey ?? urlString;
+
 
     // Bypass the cache altogether for HEAD requests. Caching them might be fine
     // to do, but for now this is just a pragmatic choice for timeliness without
@@ -72,7 +86,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
     // refreshing headers with HEAD requests, responding to HEADs with cached
     // and valid GETs, etc.)
     if (requestOpts.method === 'HEAD') {
-      return { response: await this.httpFetch(urlString, requestOpts) };
+      return { response: await this.httpFetch(urlString, requestOpts), metrics };
     }
 
     const entry =
@@ -96,6 +110,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
         requestOpts,
         policy,
         cacheKey,
+        metrics,
         cache?.cacheOptions,
       );
     }
@@ -120,6 +135,8 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
       // `ttl` returned from `cacheOptionsFor`) and we're within that TTL, or
       // the cache entry was not created with an explicit TTL override and the
       // header-based cache policy says we can safely use the cached response.
+      metrics.fromCache = true;
+      metrics.age = policy.age();
       const headers = policy.responseHeaders();
       return {
         response: new NodeFetchResponse(body, {
@@ -127,6 +144,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
           status: policy._status,
           headers: cachePolicyHeadersToNodeFetchHeadersInit(headers),
         }),
+        metrics,
       };
     } else {
       // We aren't sure that we're allowed to use the cached response, so we are
@@ -161,6 +179,12 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
         policyResponseFrom(revalidationResponse),
       ) as unknown as { policy: SneakyCachePolicy; modified: boolean };
 
+      if (!modified) {
+        metrics.fromCache = true;
+        metrics.age = revalidatedPolicy.age();
+      }
+      metrics.revalidated = true;
+
       return this.storeResponseAndReturnClone(
         urlString,
         new NodeFetchResponse(
@@ -176,6 +200,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
         requestOpts,
         revalidatedPolicy,
         cacheKey,
+        metrics,
         cache?.cacheOptions,
       );
     }
@@ -187,6 +212,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
     request: RequestOptions<CO>,
     policy: SneakyCachePolicy,
     cacheKey: string,
+    metrics: Omit<Metrics, 'timeToLive'>,
     cacheOptions?:
       | CO
       | ((
@@ -207,14 +233,14 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
       // Without an override, we only cache GET requests and respect standard HTTP cache semantics
       !(request.method === 'GET' && policy.storable())
     ) {
-      return { response };
+      return { response, metrics };
     }
 
     let ttl =
       ttlOverride === undefined
         ? Math.round(policy.timeToLive() / 1000)
         : ttlOverride;
-    if (ttl <= 0) return { response };
+    if (ttl <= 0) return { response, metrics };
 
     // If a response can be revalidated, we don't want to remove it from the
     // cache right after it expires. (See the comment above the call to
@@ -250,6 +276,10 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
         ttlOverride,
         cacheKey,
       }),
+      metrics: {
+        ...metrics,
+        timeToLive: ttl,
+      }
     };
   }
 
