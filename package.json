@@ -41,7 +41,7 @@
     "@types/node": "16.18.105",
     "@typescript-eslint/eslint-plugin": "6.21.0",
     "@typescript-eslint/parser": "6.21.0",
-    "cspell": "8.13.2",
+    "cspell": "8.13.3",
     "eslint": "8.57.0",
     "form-data": "4.0.0",
     "graphql": "16.9.0",
