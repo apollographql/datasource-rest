@@ -10,7 +10,7 @@ import { GraphQLError } from 'graphql';
 import type { Options as HttpCacheSemanticsOptions } from 'http-cache-semantics';
 import cloneDeep from 'lodash.clonedeep';
 import isPlainObject from 'lodash.isplainobject';
-import { HTTPCache } from './HTTPCache';
+import {HTTPCache, Metrics} from './HTTPCache';
 
 export type ValueOrPromise<T> = T | Promise<T>;
 
@@ -154,6 +154,7 @@ export interface RequestDeduplicationResult {
 export interface HTTPCacheResult {
   // This is primarily returned so that tests can be deterministic.
   cacheWritePromise: Promise<void> | undefined;
+  metrics: Metrics;
 }
 export interface DataSourceFetchResult<TResult> {
   parsedBody: TResult;
@@ -536,7 +537,7 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
           ? outgoingRequest.cacheOptions
           : this.cacheOptionsFor?.bind(this);
         try {
-          const { response, cacheWritePromise } = await this.httpCache.fetch(
+          const { response, cacheWritePromise, metrics } = await this.httpCache.fetch(
             url,
             outgoingRequest,
             {
@@ -565,6 +566,7 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
             response,
             httpCache: {
               cacheWritePromise,
+              metrics,
             },
           };
         } catch (error) {
