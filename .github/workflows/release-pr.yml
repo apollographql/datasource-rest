@@ -1,10 +1,8 @@
 name: Release
-
 on:
   push:
     branches:
-      - main
-
+      - feature/aiova/storage-mode
 jobs:
   release:
     name: Release
@@ -15,19 +13,18 @@ jobs:
         with:
           # This makes Actions fetch all Git history so that Changesets can generate changelogs with the correct commits
           fetch-depth: 0
-
       - name: Setup Node.js 16.x
         uses: actions/setup-node@v4
         with:
           node-version: 16.x
-
       - name: Install Dependencies
         run: npm i
-
-      - name: Create Release Pull Request / NPM Publish
+      - name: Create Release
         uses: changesets/action@v1
         with:
-          publish: npm run changeset-publish
+          version: npm run changeset-version
+          commit: "chore: version packages"
+          title: "chore: version packages"
+          createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
