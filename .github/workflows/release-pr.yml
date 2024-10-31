@@ -1,10 +1,8 @@
 name: Release
-
 on:
   push:
     branches:
       - main
-
 jobs:
   release:
     name: Release
@@ -13,21 +11,41 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
         with:
-          # This makes Actions fetch all Git history so that Changesets can generate changelogs with the correct commits
           fetch-depth: 0
-
       - name: Setup Node.js 16.x
         uses: actions/setup-node@v4
         with:
           node-version: 16.x
-
       - name: Install Dependencies
         run: npm i
-
-      - name: Create Release Pull Request / NPM Publish
-        uses: changesets/action@v1
-        with:
-          publish: npm run changeset-publish
+      - name: Setup Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "github-actions@github.com"
+      - name: Version and Create Tag
+        id: version
+        run: |
+          # Run changeset version
+          npx changeset version
+          
+          # Get new version from package.json
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          
+          # Commit changes
+          git add .
+          git commit -m "chore: release version $NEW_VERSION"
+          
+          # Create and push tag
+          git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
+          git push origin "v$NEW_VERSION"
+          git push origin feature/aiova/storage-mode
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        with:
+          tag_name: v${{ steps.version.outputs.new_version }}
+          release_name: Release v${{ steps.version.outputs.new_version }}
+          draft: false
+          prerelease: false

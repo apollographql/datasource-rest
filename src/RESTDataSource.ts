@@ -136,6 +136,11 @@ export interface CacheOptions {
    * cached.
    */
   ttl?: number;
+  /**
+   * default - the default cache strategy that will stringify/parse the response
+   * object - will cache the response in the original format
+   */
+  cacheStrategy?: 'default' | 'object';
 }
 
 const NODE_ENV = process.env.NODE_ENV;
@@ -323,17 +328,23 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
       'requestDeduplication'
     >,
     requestDeduplicationResult: RequestDeduplicationResult,
+    cacheOptions: CacheOptions
   ): DataSourceFetchResult<TResult> {
     return {
       ...dataSourceFetchResult,
       requestDeduplication: requestDeduplicationResult,
-      parsedBody: this.cloneParsedBody(dataSourceFetchResult.parsedBody),
+      parsedBody: this.cloneParsedBody(dataSourceFetchResult.parsedBody, cacheOptions),
     };
   }
 
-  protected cloneParsedBody<TResult>(parsedBody: TResult) {
+  protected cloneParsedBody<TResult>(parsedBody: TResult, cacheOptions: CacheOptions) {
     // consider using `structuredClone()` when we drop support for Node 16
-    return cloneDeep(parsedBody);
+    const cacheStrategy  = cacheOptions?.cacheStrategy
+    if(cacheStrategy === "object") {
+      return (Array.isArray(parsedBody) ? [...parsedBody] : {...parsedBody}) as TResult
+    } else {
+      return cloneDeep(parsedBody);
+    }
   }
 
   protected shouldJSONSerializeBody(
@@ -536,7 +547,7 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
           ? outgoingRequest.cacheOptions
           : this.cacheOptionsFor?.bind(this);
         try {
-          const { response, cacheWritePromise } = await this.httpCache.fetch(
+          const result = await this.httpCache.fetch(
             url,
             outgoingRequest,
             {
@@ -547,24 +558,20 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
             },
           );
 
-          if (cacheWritePromise) {
-            this.catchCacheWritePromiseErrors(cacheWritePromise);
-          }
-
-          const parsedBody = await this.parseBody(response);
+          const parsedBody = result.parsedBody ?? await this.parseBody(result.response);
 
           await this.throwIfResponseIsError({
             url,
             request: outgoingRequest,
-            response,
+            response: result.response,
             parsedBody,
           });
 
           return {
             parsedBody: parsedBody as any as TResult,
-            response,
+            response: result.response,
             httpCache: {
-              cacheWritePromise,
+              cacheWritePromise: result.cacheWritePromise,
             },
           };
         } catch (error) {
@@ -574,6 +581,9 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
       });
     };
 
+    const cacheOptions = outgoingRequest.cacheOptions
+      ? outgoingRequest.cacheOptions
+      : this.cacheOptionsFor?.bind(this);
     // Cache GET requests based on the calculated cache key
     // Disabling the request cache does not disable the response cache
     const policy = this.requestDeduplicationPolicyFor(url, outgoingRequest);
@@ -589,7 +599,7 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
           this.cloneDataSourceFetchResult(result, {
             policy,
             deduplicatedAgainstPreviousRequest: true,
-          }),
+          }, cacheOptions as CacheOptions),
         );
 
       const thisRequestPromise = performRequest();
@@ -609,8 +619,8 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
         // haven't quite bothered yet.
         return this.cloneDataSourceFetchResult(await thisRequestPromise, {
           policy,
-          deduplicatedAgainstPreviousRequest: false,
-        });
+          deduplicatedAgainstPreviousRequest: false
+        }, cacheOptions as CacheOptions);
       } finally {
         if (policy.policy === 'deduplicate-during-request-lifetime') {
           this.deduplicationPromises.delete(policy.deduplicationKey);

@@ -1,7 +1,7 @@
 {
-  "name": "@apollo/datasource-rest",
+  "name": "@apollo/datasource-rest-storage",
   "description": "REST DataSource for Apollo Server v4",
-  "version": "6.3.0",
+  "version": "6.3.1",
   "author": "Apollo <packages@apollographql.com>",
   "license": "MIT",
   "repository": {
@@ -29,7 +29,8 @@
     "watch": "tsc --build --watch",
     "lint": "eslint src/**/*.ts",
     "changeset-publish": "changeset publish",
-    "changeset-check": "changeset status --verbose --since=origin/main"
+    "changeset-check": "changeset status --verbose --since=origin/main",
+    "changeset-version": "changeset version"
   },
   "devDependencies": {
     "@apollo/server": "4.11.0",

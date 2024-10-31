@@ -1,5 +1,11 @@
 # @apollo/datasource-rest
 
+## 6.3.1
+
+### Patch Changes
+
+- [`714b10b`](https://github.com/apollographql/datasource-rest/commit/714b10bf6b039aa39dd0d287100c4f3cea0bcd47) Thanks [@adr-iova](https://github.com/adr-iova)! - Add multiple cache strategies
+
 ## 6.3.0
 
 ### Minor Changes
