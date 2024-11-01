@@ -1,5 +1,11 @@
 # @apollo/datasource-rest
 
+## 6.3.4
+
+### Patch Changes
+
+- [`9b4ed27`](https://github.com/apollographql/datasource-rest/commit/9b4ed278111e031c3ee86672f0ecf2586b891590) Thanks [@adr-iova](https://github.com/adr-iova)! - changes for CI/CD
+
 ## 6.3.2
 
 ### Patch Changes
