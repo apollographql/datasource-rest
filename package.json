@@ -1,7 +1,7 @@
 {
   "name": "@apollo/datasource-rest-storage",
   "description": "REST DataSource for Apollo Server v4",
-  "version": "6.3.1",
+  "version": "6.3.2",
   "author": "Apollo <packages@apollographql.com>",
   "license": "MIT",
   "repository": {
