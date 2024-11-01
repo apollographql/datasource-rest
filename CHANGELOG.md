@@ -1,5 +1,11 @@
 # @apollo/datasource-rest
 
+## 6.3.2
+
+### Patch Changes
+
+- [`9c37ba2`](https://github.com/apollographql/datasource-rest/commit/9c37ba20c45688d21d634003896c524707ecc5f9) Thanks [@adr-iova](https://github.com/adr-iova)! - fix body already used for big responses
+
 ## 6.3.1
 
 ### Patch Changes
