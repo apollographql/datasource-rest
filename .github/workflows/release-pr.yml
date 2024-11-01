@@ -2,7 +2,12 @@ name: Release
 on:
   push:
     branches:
-      - main
+      - feature/aiova/storage-mode
+
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   release:
     name: Release
