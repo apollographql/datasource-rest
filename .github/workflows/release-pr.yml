@@ -2,7 +2,7 @@ name: Release
 on:
   push:
     branches:
-      - feature/aiova/storage-mode
+      - main
 jobs:
   release:
     name: Release
