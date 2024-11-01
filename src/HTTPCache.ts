@@ -17,12 +17,6 @@ import type {
   ValueOrPromise,
 } from './RESTDataSource';
 
-interface PolicyCacheEntry {
-  policy: any;
-  ttlOverride?: number;
-  body: string;
-}
-
 // We want to use a couple internal properties of CachePolicy. (We could get
 // `_url` and `_status` off of the serialized CachePolicyObject, but `age()` is
 // just missing from `@types/http-cache-semantics` for now.) So we just cast to
@@ -83,25 +77,49 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
     }
 
     let cacheOptions = cache?.cacheOptions;
-    if (typeof cacheOptions === 'function') {
-      const response = await this.httpFetch(urlString, requestOpts);
-      cacheOptions = await cacheOptions(urlString, response, requestOpts);
-      if (cacheOptions?.cacheStrategy === 'object') {
+    const cacheStrategy = (cacheOptions as CacheOptions)?.cacheStrategy ?? 'default';
+
+    if (cacheStrategy === 'object') {
+      if (requestOpts.skipCache) {
+        const response = await this.httpFetch(urlString, requestOpts);
         const parsedBody = await response.json();
-        // Store in cache if ttl is provided
-        if (cacheOptions?.ttl) {
-          const cacheWritePromise = this.keyValueCache.set(
-            cacheKey,
-            parsedBody,
-            cacheOptions as CO
-          ).catch(error => {
-            console.error('Error writing to cache:', error);
-          });
-          return { response, parsedBody, cacheWritePromise };
-        }
         return { response, parsedBody };
       }
-      // Handle policy-based caching
+
+      const cachedValue = await this.keyValueCache.get(cacheKey);
+      if (cachedValue !== undefined) {
+        return {
+          response: new NodeFetchResponse(undefined, { status: 200 }),
+          parsedBody: cachedValue,
+        };
+      }
+
+      const response = await this.httpFetch(urlString, requestOpts);
+      const parsedBody = await response.json();
+
+      if ((cacheOptions as CacheOptions)?.ttl) {
+        const cacheWritePromise = this.keyValueCache.set(
+          cacheKey,
+          parsedBody,
+          cacheOptions as CO
+        ).catch(error => {
+          console.error('Error writing to cache:', error);
+        });
+        return { response, parsedBody, cacheWritePromise };
+      }
+
+      return { response, parsedBody };
+    }
+
+    const entry =
+      requestOpts.skipCache !== true
+        ? await this.keyValueCache.get(cacheKey)
+        : undefined;
+    if (!entry) {
+      // There's nothing in our cache. Fetch the URL and save it to the cache if
+      // we're allowed.
+      const response = await this.httpFetch(urlString, requestOpts);
+
       const policy = new CachePolicy(
         policyRequestFrom(urlString, requestOpts),
         policyResponseFrom(response),
@@ -114,94 +132,16 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
         requestOpts,
         policy,
         cacheKey,
-        cacheOptions,
+        cache?.cacheOptions,
       );
     }
 
-    // Determine caching strategy
-    const cacheStrategy = cacheOptions?.cacheStrategy ?? 'default';
+    const { policy: policyRaw, ttlOverride, body } = JSON.parse(entry);
 
-    if (cacheStrategy === 'object') {
-      return this.handleDirectCache(urlString, requestOpts, cacheKey, cacheOptions);
-    }
-
-    return this.handlePolicyCache(
-      urlString,
-      requestOpts,
-      cacheKey,
-      cacheOptions,
-      cache?.httpCacheSemanticsCachePolicyOptions
-    );
-  }
-
-  private async handleDirectCache(
-    urlString: string,
-    requestOpts: RequestOptions<CO>,
-    cacheKey: string,
-    cacheOptions?: CacheOptions,
-  ): Promise<ResponseWithCacheWritePromise> {
-    if (requestOpts.skipCache) {
-      const response = await this.httpFetch(urlString, requestOpts);
-      const parsedBody = await response.json();
-      return { response, parsedBody };
-    }
-
-    const cachedValue = await this.keyValueCache.get(cacheKey);
-    if (cachedValue !== undefined) {
-      return {
-        response: new NodeFetchResponse(undefined, { status: 200 }),
-        parsedBody: cachedValue,
-      };
-    }
-
-    const response = await this.httpFetch(urlString, requestOpts);
-    const parsedBody = await response.json();
-
-    if (cacheOptions?.ttl) {
-      const cacheWritePromise = this.keyValueCache.set(
-        cacheKey,
-        parsedBody,
-        cacheOptions as CO
-      ).catch(error => {
-        console.error('Error writing to cache:', error);
-      });
-      return { response, parsedBody, cacheWritePromise };
-    }
-
-    return { response, parsedBody };
-  }
-
-  private async handlePolicyCache(
-    urlString: string,
-    requestOpts: RequestOptions<CO>,
-    cacheKey: string,
-    cacheOptions?: CO,
-    httpCacheSemanticsCachePolicyOptions?: HttpCacheSemanticsOptions,
-  ): Promise<ResponseWithCacheWritePromise> {
-    const entry = requestOpts.skipCache !== true
-      ? await this.keyValueCache.get(cacheKey)
-      : undefined;
-
-    if (!entry) {
-      const response = await this.httpFetch(urlString, requestOpts);
-      const policy = new CachePolicy(
-        policyRequestFrom(urlString, requestOpts),
-        policyResponseFrom(response),
-        httpCacheSemanticsCachePolicyOptions,
-      ) as SneakyCachePolicy;
-
-      return this.storeResponseAndReturnClone(
-        urlString,
-        response,
-        requestOpts,
-        policy,
-        cacheKey,
-        cacheOptions,
-      );
-    }
-
-    const { policy: policyRaw, ttlOverride, body } = JSON.parse(entry) as PolicyCacheEntry;
     const policy = CachePolicy.fromObject(policyRaw) as SneakyCachePolicy;
+    // Remove url from the policy, because otherwise it would never match a
+    // request with a custom cache key (ie, we want users to be able to tell us
+    // that two requests should be treated as the same even if the URL differs).
     const urlFromPolicy = policy._url;
     policy._url = undefined;
 
@@ -212,6 +152,10 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
           policyRequestFrom(urlString, requestOpts),
         ))
     ) {
+      // Either the cache entry was created with an explicit TTL override (ie,
+      // `ttl` returned from `cacheOptionsFor`) and we're within that TTL, or
+      // the cache entry was not created with an explicit TTL override and the
+      // header-based cache policy says we can safely use the cached response.
       const headers = policy.responseHeaders();
       return {
         response: new NodeFetchResponse(body, {
@@ -220,42 +164,57 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
           headers: cachePolicyHeadersToNodeFetchHeadersInit(headers),
         }),
       };
+    } else {
+      // We aren't sure that we're allowed to use the cached response, so we are
+      // going to actually do a fetch. However, we may have one extra trick up
+      // our sleeve. If the cached response contained an `etag` or
+      // `last-modified` header, then we can add an appropriate `if-none-match`
+      // or `if-modified-since` header to the request. If what we're fetching
+      // hasn't changed, then the server can return a small 304 response instead
+      // of a large 200, and we can use the body from our cache. This logic is
+      // implemented inside `policy.revalidationHeaders`; we support it by
+      // setting a larger KeyValueCache TTL for responses with these headers
+      // (see `canBeRevalidated`).  (If the cached response doesn't have those
+      // headers, we'll just end up fetching the normal request here.)
+      //
+      // Note that even if we end up able to reuse the cached body here, we
+      // still re-write to the cache, because we might need to update the TTL or
+      // other aspects of the cache policy based on the headers we got back.
+      const revalidationHeaders = policy.revalidationHeaders(
+        policyRequestFrom(urlString, requestOpts),
+      );
+      const revalidationRequest = {
+        ...requestOpts,
+        headers: cachePolicyHeadersToFetcherHeadersInit(revalidationHeaders),
+      };
+      const revalidationResponse = await this.httpFetch(
+        urlString,
+        revalidationRequest,
+      );
+
+      const { policy: revalidatedPolicy, modified } = policy.revalidatedPolicy(
+        policyRequestFrom(urlString, revalidationRequest),
+        policyResponseFrom(revalidationResponse),
+      ) as unknown as { policy: SneakyCachePolicy; modified: boolean };
+
+      return this.storeResponseAndReturnClone(
+        urlString,
+        new NodeFetchResponse(
+          modified ? await revalidationResponse.text() : body,
+          {
+            url: revalidatedPolicy._url,
+            status: revalidatedPolicy._status,
+            headers: cachePolicyHeadersToNodeFetchHeadersInit(
+              revalidatedPolicy.responseHeaders(),
+            ),
+          },
+        ),
+        requestOpts,
+        revalidatedPolicy,
+        cacheKey,
+        cache?.cacheOptions,
+      );
     }
-
-    const revalidationHeaders = policy.revalidationHeaders(
-      policyRequestFrom(urlString, requestOpts),
-    );
-    const revalidationRequest = {
-      ...requestOpts,
-      headers: cachePolicyHeadersToFetcherHeadersInit(revalidationHeaders),
-    };
-    const revalidationResponse = await this.httpFetch(
-      urlString,
-      revalidationRequest,
-    );
-
-    const { policy: revalidatedPolicy, modified } = policy.revalidatedPolicy(
-      policyRequestFrom(urlString, revalidationRequest),
-      policyResponseFrom(revalidationResponse),
-    ) as unknown as { policy: SneakyCachePolicy; modified: boolean };
-
-    return this.storeResponseAndReturnClone(
-      urlString,
-      new NodeFetchResponse(
-        modified ? await revalidationResponse.text() : body,
-        {
-          url: revalidatedPolicy._url,
-          status: revalidatedPolicy._status,
-          headers: cachePolicyHeadersToNodeFetchHeadersInit(
-            revalidatedPolicy.responseHeaders(),
-          ),
-        },
-      ),
-      requestOpts,
-      revalidatedPolicy,
-      cacheKey,
-      cacheOptions,
-    );
   }
 
   private async storeResponseAndReturnClone(
@@ -264,44 +223,99 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
     request: RequestOptions<CO>,
     policy: SneakyCachePolicy,
     cacheKey: string,
-    cacheOptions?: CO,
+    cacheOptions?:
+      | CO
+      | ((
+          url: string,
+          response: FetcherResponse,
+          request: RequestOptions<CO>,
+        ) => ValueOrPromise<CO | undefined>),
   ): Promise<ResponseWithCacheWritePromise> {
     if (typeof cacheOptions === 'function') {
-      // @ts-ignore
       cacheOptions = await cacheOptions(url, response, request);
     }
 
-    const ttlOverride = cacheOptions?.ttl;
+    let ttlOverride = cacheOptions?.ttl;
 
     if (
+      // With a TTL override, only cache successful responses but otherwise ignore method and response headers
       !(ttlOverride && policy._status >= 200 && policy._status <= 299) &&
+      // Without an override, we only cache GET requests and respect standard HTTP cache semantics
       !(request.method === 'GET' && policy.storable())
     ) {
       return { response };
     }
 
-    const ttl = ttlOverride ?? Math.round(policy.timeToLive() / 1000);
+    let ttl =
+      ttlOverride === undefined
+        ? Math.round(policy.timeToLive() / 1000)
+        : ttlOverride;
     if (ttl <= 0) return { response };
 
-    const returnedResponse = response.clone();
-    const body = await response.text();
+    // If a response can be revalidated, we don't want to remove it from the
+    // cache right after it expires. (See the comment above the call to
+    // `revalidationHeaders` for details.) We may be able to use better
+    // heuristics here, but for now we'll take the max-age times 2.
+    if (canBeRevalidated(response)) {
+      ttl *= 2;
+    }
 
-    const entry: PolicyCacheEntry = {
+    // Clone the response and return it. In the background, read the original
+    // response and write it to the cache. The caller is responsible for
+    // `await`ing or `catch`ing `cacheWritePromise`. (By default, RESTDataSource
+    // `catch`es it with `console.log`.)
+    //
+    // When you clone a response, you're generally expected (at least by
+    // node-fetch: https://github.com/node-fetch/node-fetch/issues/151) to read
+    // both bodies in parallel; if you only read one of them and ignore the
+    // other, the one you're reading might start blocking once the second one's
+    // buffer fills. We don't think this is a real problem here: we do
+    // immediately read from the one we're writing to the cache, and if the
+    // caller doesn't bother to read its response, the only real downside is
+    // that we won't ever write to the cache, which seems maybe OK for an
+    // "ignored" body. (It could perhaps lead to a memory leak, but the answer
+    // there is to make sure your parseBody override does consume the response.)
+    const returnedResponse = response.clone();
+    return {
+      response: returnedResponse,
+      cacheWritePromise: this.readResponseAndWriteToCache({
+        response,
+        policy,
+        cacheOptions,
+        ttl,
+        ttlOverride,
+        cacheKey,
+      }),
+    };
+  }
+
+  private async readResponseAndWriteToCache({
+    response,
+    policy,
+    cacheOptions,
+    ttl,
+    ttlOverride,
+    cacheKey,
+  }: {
+    response: FetcherResponse;
+    policy: CachePolicy;
+    cacheOptions?: CO;
+    ttl: number | null | undefined;
+    ttlOverride: number | undefined;
+    cacheKey: string;
+  }): Promise<void> {
+    const body = await response.text();
+    const entry = JSON.stringify({
       policy: policy.toObject(),
       ttlOverride,
       body,
-    };
+    });
 
-    const cacheWritePromise = this.keyValueCache
-      .set(cacheKey, JSON.stringify(entry), {
-        ...cacheOptions,
-        ttl: canBeRevalidated(response) ? ttl * 2 : ttl,
-      } as CO)
-      .catch(error => {
-        console.error('Error writing to cache:', error);
-      });
-
-    return { response: returnedResponse, cacheWritePromise };
+    // Set the value into the cache, and forward all the set cache option into the setter function
+    await this.keyValueCache.set(cacheKey, entry, {
+      ...cacheOptions,
+      ttl,
+    } as CO);
   }
 }
 

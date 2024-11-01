@@ -338,7 +338,6 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
   }
 
   protected cloneParsedBody<TResult>(parsedBody: TResult, cacheOptions: CacheOptions) {
-    // consider using `structuredClone()` when we drop support for Node 16
     const cacheStrategy  = cacheOptions?.cacheStrategy
     if(cacheStrategy === "object") {
       return (Array.isArray(parsedBody) ? [...parsedBody] : {...parsedBody}) as TResult
@@ -547,7 +546,7 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
           ? outgoingRequest.cacheOptions
           : this.cacheOptionsFor?.bind(this);
         try {
-          const result = await this.httpCache.fetch(
+          const { response, cacheWritePromise, parsedBody } = await this.httpCache.fetch(
             url,
             outgoingRequest,
             {
@@ -558,20 +557,25 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
             },
           );
 
-          const parsedBody = result.parsedBody ?? await this.parseBody(result.response);
+          if (cacheWritePromise) {
+            this.catchCacheWritePromiseErrors(cacheWritePromise);
+          }
+
+          const _parsedBody = parsedBody ?? await this.parseBody(response);
 
           await this.throwIfResponseIsError({
             url,
             request: outgoingRequest,
-            response: result.response,
-            parsedBody,
+            response,
+            // @ts-ignore
+            _parsedBody,
           });
 
           return {
-            parsedBody: parsedBody as any as TResult,
-            response: result.response,
+            parsedBody: _parsedBody as any as TResult,
+            response,
             httpCache: {
-              cacheWritePromise: result.cacheWritePromise,
+              cacheWritePromise,
             },
           };
         } catch (error) {
@@ -619,7 +623,7 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
         // haven't quite bothered yet.
         return this.cloneDataSourceFetchResult(await thisRequestPromise, {
           policy,
-          deduplicatedAgainstPreviousRequest: false
+          deduplicatedAgainstPreviousRequest: false,
         }, cacheOptions as CacheOptions);
       } finally {
         if (policy.policy === 'deduplicate-during-request-lifetime') {
