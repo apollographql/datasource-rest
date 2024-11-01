@@ -29,6 +29,8 @@ jobs:
           git config user.email "github-actions@github.com"
       - name: Version and Create Tag
         id: version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Run changeset version
           npx changeset version
