@@ -3,11 +3,6 @@ on:
   push:
     branches:
       - feature/aiova/storage-mode
-
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
   release:
     name: Release
