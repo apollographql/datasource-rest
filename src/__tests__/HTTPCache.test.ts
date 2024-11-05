@@ -63,10 +63,11 @@ describe('HTTPCache', () => {
   it('fetches a response from the origin when not cached', async () => {
     mockGetAdaLovelace();
 
-    const { response, cacheWritePromise } = await httpCache.fetch(adaUrl);
+    const { response, responseFromCache, cacheWritePromise } = await httpCache.fetch(adaUrl);
     expect(cacheWritePromise).toBeUndefined();
 
     expect(await response.json()).toEqual({ name: 'Ada Lovelace' });
+    expect(responseFromCache).toBeFalsy();
   });
 
   it('returns a cached response when not expired', async () => {
@@ -79,11 +80,12 @@ describe('HTTPCache', () => {
     await cacheWritePromise;
     jest.advanceTimersByTime(10000);
 
-    const { response } = await httpCache.fetch(adaUrl);
+    const { response, responseFromCache } = await httpCache.fetch(adaUrl);
 
     expect(response.url).toBe(adaUrl.toString());
     expect(await response.json()).toEqual({ name: 'Ada Lovelace' });
     expect(response.headers.get('age')).toEqual('10');
+    expect(responseFromCache).toBe(true);
   });
 
   it('fetches a fresh response from the origin when expired', async () => {
@@ -96,12 +98,13 @@ describe('HTTPCache', () => {
 
     mockGetAlanTuring({ 'cache-control': 'max-age=30' });
 
-    const { response } = await httpCache.fetch(
+    const { response, responseFromCache } = await httpCache.fetch(
       new URL('https://api.example.com/people/1'),
     );
 
     expect(await response.json()).toEqual({ name: 'Alan Turing' });
     expect(response.headers.get('age')).toBeNull();
+    expect(responseFromCache).toBeFalsy();
   });
 
   describe('overriding TTL', () => {
