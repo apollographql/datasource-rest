@@ -73,7 +73,10 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
     // refreshing headers with HEAD requests, responding to HEADs with cached
     // and valid GETs, etc.)
     if (requestOpts.method === 'HEAD') {
-      return { response: await this.httpFetch(urlString, requestOpts), responseFromCache: false };
+      return {
+        response: await this.httpFetch(urlString, requestOpts),
+        responseFromCache: false,
+      };
     }
 
     const entry =
@@ -128,7 +131,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
           status: policy._status,
           headers: cachePolicyHeadersToNodeFetchHeadersInit(headers),
         }),
-        responseFromCache: true
+        responseFromCache: true,
       };
     } else {
       // We aren't sure that we're allowed to use the cached response, so we are

@@ -63,7 +63,8 @@ describe('HTTPCache', () => {
   it('fetches a response from the origin when not cached', async () => {
     mockGetAdaLovelace();
 
-    const { response, responseFromCache, cacheWritePromise } = await httpCache.fetch(adaUrl);
+    const { response, responseFromCache, cacheWritePromise } =
+      await httpCache.fetch(adaUrl);
     expect(cacheWritePromise).toBeUndefined();
 
     expect(await response.json()).toEqual({ name: 'Ada Lovelace' });
