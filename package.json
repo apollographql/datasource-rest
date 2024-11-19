@@ -28,6 +28,7 @@
     "test:ci": "jest --coverage --ci --maxWorkers=2 --reporters=default --reporters=jest-junit",
     "watch": "tsc --build --watch",
     "lint": "eslint src/**/*.ts",
+    "changeset-add": "changeset add",
     "changeset-publish": "changeset publish",
     "changeset-check": "changeset status --verbose --since=origin/main"
   },
