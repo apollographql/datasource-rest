@@ -13,7 +13,7 @@ import isPlainObject from 'lodash.isplainobject';
 import { HTTPCache } from './HTTPCache';
 
 export type ValueOrPromise<T> = T | Promise<T>;
-export type RequestResponseType = 'arraybuffer' | 'text' | 'json'
+export type RequestResponseType = 'arraybuffer' | 'text' | 'json';
 
 export type RequestOptions<CO extends CacheOptions = CacheOptions> =
   FetcherRequestInit & {
@@ -306,7 +306,10 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
   //
   // If you override this to return interesting new mutable data types, override
   // cloneParsedBody too.
-  protected parseBody(response: FetcherResponse, requestResponseTypeOption: RequestResponseType | undefined): Promise<object | string> {
+  protected parseBody(
+    response: FetcherResponse,
+    requestResponseTypeOption: RequestResponseType | undefined,
+  ): Promise<object | string> {
     const contentType = response.headers.get('Content-Type');
     const contentLength = response.headers.get('Content-Length');
 
@@ -572,7 +575,10 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
             this.catchCacheWritePromiseErrors(cacheWritePromise);
           }
 
-          const parsedBody = await this.parseBody(response, outgoingRequest.responseType);
+          const parsedBody = await this.parseBody(
+            response,
+            outgoingRequest.responseType,
+          );
 
           await this.throwIfResponseIsError({
             url,
