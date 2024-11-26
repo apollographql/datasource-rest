@@ -13,9 +13,16 @@ import isPlainObject from 'lodash.isplainobject';
 import { HTTPCache } from './HTTPCache';
 
 export type ValueOrPromise<T> = T | Promise<T>;
+export type RequestResponseType = 'arraybuffer' | 'text' | 'json'
 
 export type RequestOptions<CO extends CacheOptions = CacheOptions> =
   FetcherRequestInit & {
+    /**
+     * `responseType` indicates the type of data that the server will respond with
+     *  options are: 'arraybuffer', 'text', 'json'
+     *  Defaults to JSON.
+     */
+    responseType?: RequestResponseType;
     /**
      * URL search parameters can be provided either as a record object (in which
      * case keys with `undefined` values are ignored) or as an URLSearchParams
@@ -299,9 +306,23 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
   //
   // If you override this to return interesting new mutable data types, override
   // cloneParsedBody too.
-  protected parseBody(response: FetcherResponse): Promise<object | string> {
+  protected parseBody(response: FetcherResponse, requestResponseTypeOption: RequestResponseType | undefined): Promise<object | string> {
     const contentType = response.headers.get('Content-Type');
     const contentLength = response.headers.get('Content-Length');
+
+    if (requestResponseTypeOption) {
+      switch (requestResponseTypeOption) {
+        case 'arraybuffer':
+          return response.arrayBuffer();
+        case 'text':
+          return response.text();
+        case 'json':
+          return response.json();
+        default:
+          return response.json();
+      }
+    }
+
     if (
       // As one might expect, a "204 No Content" is empty! This means there
       // isn't enough to `JSON.parse`, and trying will result in an error.
@@ -551,7 +572,7 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
             this.catchCacheWritePromiseErrors(cacheWritePromise);
           }
 
-          const parsedBody = await this.parseBody(response);
+          const parsedBody = await this.parseBody(response, outgoingRequest.responseType);
 
           await this.throwIfResponseIsError({
             url,
