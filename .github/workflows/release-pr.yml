@@ -1,8 +1,5 @@
 name: Release
 
-# Temp
-#on: pull_request
-#
 on:
   push:
     branches:
