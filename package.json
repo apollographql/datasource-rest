@@ -3,7 +3,6 @@
   "description": "REST DataSource for Apollo Server v4",
   "version": "0.2.0",
   "license": "MIT",
-  "private": true,
   "repository": {
     "type": "git",
     "url": "https://github.com/Andrii-Kitsun/ak-datasource-rest.git"
