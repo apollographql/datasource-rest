@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/@changesets/config@1.6.3/schema.json",
   "changelog": [
     "@changesets/changelog-github",
-    { "repo": "ak-datasource-rest" }
+    { "repo": "Andrii-Kitsun/ak-datasource-rest" }
   ],
   "commit": false,
   "access": "restricted",
