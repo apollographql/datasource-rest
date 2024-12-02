@@ -1,6 +1,6 @@
 name: Verify Pull Request
 
-on: pull_request
+on: issue_comment
 
 jobs:
   verify_pull_request:
