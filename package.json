@@ -1,16 +1,16 @@
 {
-  "name": "@apollo/datasource-rest",
+  "name": "ak-datasource-rest",
   "description": "REST DataSource for Apollo Server v4",
-  "version": "6.3.0",
-  "author": "Apollo <packages@apollographql.com>",
+  "version": "0.1.1",
   "license": "MIT",
+  "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/apollographql/datasource-rest"
+    "url": "https://github.com/Andrii-Kitsun/ak-datasource-rest.git"
   },
-  "homepage": "https://github.com/apollographql/datasource-rest#readme",
-  "bugs": {
-    "url": "https://github.com/apollographql/datasource-rest/issues"
+  "homepage": "https://github.com/Andrii-Kitsun/ak-datasource-rest.git#readme",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -28,6 +28,7 @@
     "test:ci": "jest --coverage --ci --maxWorkers=2 --reporters=default --reporters=jest-junit",
     "watch": "tsc --build --watch",
     "lint": "eslint src/**/*.ts",
+    "lint:ci": "npm run lint && npm run prettier-check && npm run spell-check",
     "changeset-add": "changeset add",
     "changeset-publish": "changeset publish",
     "changeset-check": "changeset status --verbose --since=origin/main"
@@ -67,9 +68,5 @@
   },
   "peerDependencies": {
     "graphql": "^16.5.0"
-  },
-  "volta": {
-    "node": "20.18.1",
-    "npm": "10.9.1"
   }
 }
