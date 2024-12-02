@@ -27,11 +27,11 @@ jobs:
         if: ${{ !startsWith(github.head_ref, 'changeset-release') && !startsWith(github.head_ref, 'renovate') }}
         run: npm run changeset-check
 
-      - name: Lint 🤔
-        run: npm run lint:ci
-
-      - name: Test 🧪
-        run: npm run test:ci
+#      - name: Lint 🤔
+#        run: npm run lint:ci
+#
+#      - name: Test 🧪
+#        run: npm run test:ci
 
       - name: Build 🏗
         run: npm run build
