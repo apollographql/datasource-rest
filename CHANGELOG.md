@@ -1,5 +1,11 @@
 # ak-datasource-rest
 
+## 0.3.1
+
+### Patch Changes
+
+- [#5](https://github.com/Andrii-Kitsun/ak-datasource-rest/pull/5) [`0a6693a`](https://github.com/Andrii-Kitsun/ak-datasource-rest/commit/0a6693a38e2773fc8f0a2995ab6d3694eea53838) Thanks [@Andrii-Kitsun](https://github.com/Andrii-Kitsun)! - Change package access to private
+
 ## 0.3.0
 
 ### Minor Changes
