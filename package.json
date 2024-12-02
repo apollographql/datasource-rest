@@ -1,7 +1,7 @@
 {
   "name": "@andrii-kitsun/ak-datasource-rest",
   "description": "REST DataSource for Apollo Server v4",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "MIT",
   "repository": {
     "type": "git",
