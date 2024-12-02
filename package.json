@@ -9,7 +9,8 @@
   },
   "homepage": "https://github.com/Andrii-Kitsun/ak-datasource-rest.git#readme",
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
