@@ -1,5 +1,11 @@
 # @apollo/datasource-rest
 
+## 6.4.0
+
+### Minor Changes
+
+- [#371](https://github.com/apollographql/datasource-rest/pull/371) [`cf3adb7`](https://github.com/apollographql/datasource-rest/commit/cf3adb735d8bae5884424ee7b9da5ed8f68971f6) Thanks [@smyrick](https://github.com/smyrick)! - Add metadata if response came from cache
+
 ## 6.3.0
 
 ### Minor Changes
