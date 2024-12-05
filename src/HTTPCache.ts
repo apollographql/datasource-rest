@@ -29,7 +29,7 @@ interface SneakyCachePolicy extends CachePolicy {
 
 interface ResponseWithCacheWritePromise {
   response: FetcherResponse;
-  responseFromCache?: Boolean;
+  responseFromCache?: boolean;
   cacheWritePromise?: Promise<void>;
 }
 
@@ -247,6 +247,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
     const returnedResponse = response.clone();
     return {
       response: returnedResponse,
+      responseFromCache: false,
       cacheWritePromise: this.readResponseAndWriteToCache({
         response,
         policy,

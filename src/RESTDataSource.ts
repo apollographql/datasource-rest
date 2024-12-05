@@ -160,6 +160,7 @@ export interface DataSourceFetchResult<TResult> {
   response: FetcherResponse;
   requestDeduplication: RequestDeduplicationResult;
   httpCache: HTTPCacheResult;
+  responseFromCache?: boolean;
 }
 
 // RESTDataSource has two layers of caching. The first layer is purely in-memory
@@ -536,16 +537,13 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
           ? outgoingRequest.cacheOptions
           : this.cacheOptionsFor?.bind(this);
         try {
-          const { response, cacheWritePromise } = await this.httpCache.fetch(
-            url,
-            outgoingRequest,
-            {
+          const { response, responseFromCache, cacheWritePromise } =
+            await this.httpCache.fetch(url, outgoingRequest, {
               cacheKey,
               cacheOptions,
               httpCacheSemanticsCachePolicyOptions:
                 outgoingRequest.httpCacheSemanticsCachePolicyOptions,
-            },
-          );
+            });
 
           if (cacheWritePromise) {
             this.catchCacheWritePromiseErrors(cacheWritePromise);
@@ -566,6 +564,7 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
             httpCache: {
               cacheWritePromise,
             },
+            responseFromCache,
           };
         } catch (error) {
           this.didEncounterError(error as Error, outgoingRequest, url);
