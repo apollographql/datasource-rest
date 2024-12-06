@@ -1720,12 +1720,14 @@ describe('RESTDataSource', () => {
           'cache-control': 'public, max-age=31536000, immutable',
         });
         nock(apiUrl).get('/foo/2').reply(200);
-        const { httpCache } = await dataSource.getFoo(1);
-        expect(httpCache.cacheWritePromise).toBeDefined();
-        await httpCache.cacheWritePromise;
+        const firstResponse = await dataSource.getFoo(1);
+        expect(firstResponse.responseFromCache).toBeFalsy();
+        expect(firstResponse.httpCache.cacheWritePromise).toBeDefined();
+        await firstResponse.httpCache.cacheWritePromise;
 
         // Call a second time which should be cached
-        await dataSource.getFoo(1);
+        const secondResponse = await dataSource.getFoo(1);
+        expect(secondResponse.responseFromCache).toBe(true);
       });
 
       it('does not cache 302 responses', async () => {
@@ -1741,8 +1743,9 @@ describe('RESTDataSource', () => {
           'cache-control': 'public, max-age=31536000, immutable',
         });
         nock(apiUrl).get('/foo/2').reply(200);
-        const { httpCache } = await dataSource.getFoo(1);
-        expect(httpCache.cacheWritePromise).toBeUndefined();
+        const firstResponse = await dataSource.getFoo(1);
+        expect(firstResponse.responseFromCache).toBeFalsy();
+        expect(firstResponse.httpCache.cacheWritePromise).toBeUndefined();
 
         // Call a second time which should NOT be cached (it's a temporary redirect!).
         nock(apiUrl).get('/foo/1').reply(302, '', {
@@ -1750,7 +1753,8 @@ describe('RESTDataSource', () => {
           'cache-control': 'public, max-age=31536000, immutable',
         });
         nock(apiUrl).get('/foo/2').reply(200);
-        await dataSource.getFoo(1);
+        const secondResponse = await dataSource.getFoo(1);
+        expect(secondResponse.responseFromCache).toBeFalsy();
       });
 
       it('allows setting cache options for each request', async () => {
@@ -1773,12 +1777,14 @@ describe('RESTDataSource', () => {
         })();
 
         nock(apiUrl).get('/foo/1').reply(200);
-        const { httpCache } = await dataSource.getFoo(1);
-        expect(httpCache.cacheWritePromise).toBeDefined();
-        await httpCache.cacheWritePromise;
+        const firstResponse = await dataSource.getFoo(1);
+        expect(firstResponse.responseFromCache).toBeFalsy();
+        expect(firstResponse.httpCache.cacheWritePromise).toBeDefined();
+        await firstResponse.httpCache.cacheWritePromise;
 
         // Call a second time which should be cached
-        await dataSource.getFoo(1);
+        const secondResponse = await dataSource.getFoo(1);
+        expect(secondResponse.responseFromCache).toBe(true);
       });
 
       it('allows setting custom cache options for each request', async () => {
@@ -1800,16 +1806,17 @@ describe('RESTDataSource', () => {
         const spyOnHttpFetch = jest.spyOn(dataSource['httpCache'], 'fetch');
 
         nock(apiUrl).get('/foo/1').reply(200);
-        const { httpCache } = await dataSource.getFoo(1);
-        expect(httpCache.cacheWritePromise).toBeDefined();
-        await httpCache.cacheWritePromise;
+        const firstResponse = await dataSource.getFoo(1);
+        expect(firstResponse.httpCache.cacheWritePromise).toBeDefined();
+        await firstResponse.httpCache.cacheWritePromise;
         expect(spyOnHttpFetch.mock.calls[0][2]).toEqual({
           cacheKey: 'GET https://api.example.com/foo/1',
           cacheOptions: { ttl: 1000000, tags: ['foo', 'bar'] },
         });
 
         // Call a second time which should be cached
-        await dataSource.getFoo(1);
+        const secondResponse = await dataSource.getFoo(1);
+        expect(secondResponse.responseFromCache).toBe(true);
       });
 
       it('allows setting a short TTL for the cache', async () => {
@@ -1835,9 +1842,10 @@ describe('RESTDataSource', () => {
         })();
 
         nock(apiUrl).get('/foo/1').reply(200);
-        const { httpCache } = await dataSource.getFoo(1);
-        expect(httpCache.cacheWritePromise).toBeDefined();
-        await httpCache.cacheWritePromise;
+        const firstResponse = await dataSource.getFoo(1);
+        expect(firstResponse.responseFromCache).toBeFalsy();
+        expect(firstResponse.httpCache.cacheWritePromise).toBeDefined();
+        await firstResponse.httpCache.cacheWritePromise;
 
         // expire the cache (note: 999ms, just shy of the 1s ttl, will reliably fail this test)
         jest.advanceTimersByTime(1000);
@@ -1864,12 +1872,15 @@ describe('RESTDataSource', () => {
           'set-cookie':
             'whatever=blah; expires=Mon, 01-Jan-2050 00:00:00 GMT; path=/; domain=www.example.com',
         });
-        const { httpCache } = await dataSource.getFoo(1, false);
-        expect(httpCache.cacheWritePromise).toBeDefined();
-        await httpCache.cacheWritePromise;
+        const firstResponse = await dataSource.getFoo(1, false);
+        expect(firstResponse.responseFromCache).toBeFalsy();
+        expect(firstResponse.httpCache.cacheWritePromise).toBeDefined();
+        await firstResponse.httpCache.cacheWritePromise;
+
         // Call a second time which should be cached despite `set-cookie` due to
         // `shared: false`.
-        await dataSource.getFoo(1, false);
+        const secondResponse = await dataSource.getFoo(1, false);
+        expect(secondResponse.responseFromCache).toBe(true);
 
         nock(apiUrl).get('/foo/2').times(2).reply(200, '{}', {
           'Cache-Control': 'max-age=60,must-revalidate',
@@ -1883,7 +1894,8 @@ describe('RESTDataSource', () => {
         ).toBeUndefined();
         // Call a second time which should be not be cached because of
         // `set-cookie` with `shared: true`. (Note the `.times(2)` above.)
-        await dataSource.getFoo(2, true);
+        const cookieResponse = await dataSource.getFoo(2, true);
+        expect(cookieResponse.responseFromCache).toBeFalsy();
       });
 
       it('should not crash in revalidation flow header handling when sending non-array non-string headers', async () => {
