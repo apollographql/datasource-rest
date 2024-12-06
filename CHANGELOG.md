@@ -1,5 +1,11 @@
 # @apollo/datasource-rest
 
+## 6.4.1
+
+### Patch Changes
+
+- [#381](https://github.com/apollographql/datasource-rest/pull/381) [`8a4d4ef`](https://github.com/apollographql/datasource-rest/commit/8a4d4ef69433b0e5026812eb28729c6469194d93) Thanks [@smyrick](https://github.com/smyrick)! - Add responseFromCache to DataSourceFetchResult
+
 ## 6.4.0
 
 ### Minor Changes
