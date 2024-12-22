@@ -784,6 +784,51 @@ describe('RESTDataSource', () => {
         expect(data).toEqual({ foo: 'bar' });
       });
 
+      it('returns data as parsed JSON when Content-Type ends in +json and has charset provided', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          getFoo() {
+            return this.get('foo');
+          }
+        })();
+
+        nock(apiUrl)
+          .get('/foo')
+          .reply(
+            200,
+            { foo: 'bar' },
+            { 'content-type': 'application/vnd.api+json; charset=utf-8' },
+          );
+
+        const data = await dataSource.getFoo();
+
+        expect(data).toEqual({ foo: 'bar' });
+      });
+
+      it('returns data as parsed JSON when Content-Type ends in +json and has many parameters provided', async () => {
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          getFoo() {
+            return this.get('foo');
+          }
+        })();
+
+        nock(apiUrl).get('/foo').reply(
+          200,
+          { foo: 'bar' },
+          {
+            'content-type':
+              'application/vnd.api+json; charset=utf-8; boundary=ExampleBoundaryString',
+          },
+        );
+
+        const data = await dataSource.getFoo();
+
+        expect(data).toEqual({ foo: 'bar' });
+      });
+
       it('returns data as a string when Content-Type is text/plain', async () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
