@@ -1,5 +1,11 @@
 # @apollo/datasource-rest
 
+## 6.5.0
+
+### Minor Changes
+
+- [`2f0e04e`](https://github.com/apollographql/datasource-rest/commit/2f0e04e433556f0c5533e0699b1da2291fa93927) Thanks [@adr-iova](https://github.com/adr-iova)! - add object to cache type
+
 ## 6.4.0
 
 ### Minor Changes
