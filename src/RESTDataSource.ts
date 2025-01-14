@@ -3,7 +3,7 @@ import type {
   FetcherRequestInit,
   FetcherResponse,
 } from '@apollo/utils.fetcher';
-import type { KeyValueCache } from '@apollo/utils.keyvaluecache';
+import type { KeyValueCache, KeyValueCacheSetOptions } from '@apollo/utils.keyvaluecache';
 import type { Logger } from '@apollo/utils.logger';
 import type { WithRequired } from '@apollo/utils.withrequired';
 import { GraphQLError } from 'graphql';
@@ -146,7 +146,7 @@ export interface CacheOptions {
 const NODE_ENV = process.env.NODE_ENV;
 
 export interface DataSourceConfig {
-  cache?: KeyValueCache;
+  cache?: KeyValueCache<string | object, KeyValueCacheSetOptions>;
   fetch?: Fetcher;
   logger?: Logger;
 }
