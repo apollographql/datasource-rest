@@ -38,7 +38,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
   private httpFetch: Fetcher;
 
   constructor(
-    keyValueCache: KeyValueCache = new InMemoryLRUCache<string, CO>(),
+    keyValueCache: KeyValueCache<string | object, CO> = new InMemoryLRUCache<string | object, CO>(),
     httpFetch: Fetcher = nodeFetch,
   ) {
     this.keyValueCache = new PrefixingKeyValueCache(
