@@ -34,7 +34,7 @@ interface ResponseWithCacheWritePromise {
 }
 
 export class HTTPCache<CO extends CacheOptions = CacheOptions> {
-  private keyValueCache: KeyValueCache<string, CO>;
+  private keyValueCache: KeyValueCache<string | object, CO>;
   private httpFetch: Fetcher;
 
   constructor(
@@ -136,7 +136,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
       );
     }
 
-    const { policy: policyRaw, ttlOverride, body } = JSON.parse(entry);
+    const { policy: policyRaw, ttlOverride, body } = typeof entry === "object" ? entry : JSON.parse(entry);
 
     const policy = CachePolicy.fromObject(policyRaw) as SneakyCachePolicy;
     // Remove url from the policy, because otherwise it would never match a
