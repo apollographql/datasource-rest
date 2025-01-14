@@ -1,5 +1,11 @@
 # @apollo/datasource-rest
 
+## 6.4.0
+
+### Minor Changes
+
+- [`baf9a32`](https://github.com/apollographql/datasource-rest/commit/baf9a32e00da0a12d57915e7bb62991a90bb5b11) Thanks [@adr-iova](https://github.com/adr-iova)! - Handle objects and strings
+
 ## 6.3.4
 
 ### Patch Changes
