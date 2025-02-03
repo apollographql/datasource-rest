@@ -25,12 +25,7 @@
     // versions we support.
     {
       "matchPackageNames": ["@types/node"],
-      "allowedVersions": "16.x"
-    },
-    // v3 is ESM only
-    {
-      "matchPackageNames": ["node-fetch"],
-      "allowedVersions": "2.x"
+      "allowedVersions": "20.x"
     },
   ],
 }

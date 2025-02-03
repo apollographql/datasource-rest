@@ -1,5 +1,4 @@
 import type {
-  Fetcher,
   FetcherRequestInit,
   FetcherResponse,
 } from '@apollo/utils.fetcher';
@@ -142,7 +141,7 @@ const NODE_ENV = process.env.NODE_ENV;
 
 export interface DataSourceConfig {
   cache?: KeyValueCache;
-  fetch?: Fetcher;
+  fetch?: typeof fetch;
   logger?: Logger;
 }
 

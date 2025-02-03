@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import nock from 'nock';
 import { HTTPCache } from '../HTTPCache';
 import type { CacheOptions } from '../RESTDataSource';

@@ -8,12 +8,10 @@ import {
   RESTDataSource,
 } from '../RESTDataSource';
 
-import FormData from 'form-data';
 import { GraphQLError } from 'graphql';
 import nock from 'nock';
 import { nockAfterEach, nockBeforeEach } from './nockAssertions';
 import type { WithRequired } from '@apollo/utils.withrequired';
-import { Headers as NodeFetchHeaders } from 'node-fetch';
 import type { Logger } from '@apollo/utils.logger';
 
 const apiUrl = 'https://api.example.com';
@@ -1948,18 +1946,7 @@ describe('RESTDataSource', () => {
           const { headers } = response;
           expect(headers.get('hello')).toBe('dolly, world');
           // The general Fetcher interface only lets you get the combined header values.
-          expect(headers.get('set-cookie')).toBe('first=foo, second=bar');
-
-          if (!(headers instanceof NodeFetchHeaders)) {
-            fail(
-              'headers should be a NodeFetchHeaders when fetcher not overridden',
-            );
-          }
-          expect(headers.raw()['hello']).toStrictEqual(['dolly, world']);
-          expect(headers.raw()['set-cookie']).toStrictEqual([
-            'first=foo',
-            'second=bar',
-          ]);
+          expect(headers.get('set-cookie')).toBe('first=foo,second=bar');
         });
 
         it('for a cacheable but not de-duped request', async () => {
@@ -1988,18 +1975,8 @@ describe('RESTDataSource', () => {
             const { headers } = response;
             expect(headers.get('hello')).toBe('dolly, world');
             // The general Fetcher interface only lets you get the combined header values.
-            expect(headers.get('set-cookie')).toBe('first=foo, second=bar');
+            expect(headers.get('set-cookie')).toBe('first=foo,second=bar');
 
-            if (!(headers instanceof NodeFetchHeaders)) {
-              fail(
-                'headers should be a NodeFetchHeaders when fetcher not overridden',
-              );
-            }
-            expect(headers.raw()['hello']).toStrictEqual(['dolly, world']);
-            expect(headers.raw()['set-cookie']).toStrictEqual([
-              'first=foo',
-              'second=bar',
-            ]);
             await httpCache.cacheWritePromise;
           }
 
@@ -2010,18 +1987,7 @@ describe('RESTDataSource', () => {
             const { headers } = response;
             expect(headers.get('hello')).toBe('dolly, world');
             // The general Fetcher interface only lets you get the combined header values.
-            expect(headers.get('set-cookie')).toBe('first=foo, second=bar');
-
-            if (!(headers instanceof NodeFetchHeaders)) {
-              fail(
-                'headers should be a NodeFetchHeaders when fetcher not overridden',
-              );
-            }
-            expect(headers.raw()['hello']).toStrictEqual(['dolly, world']);
-            expect(headers.raw()['set-cookie']).toStrictEqual([
-              'first=foo',
-              'second=bar',
-            ]);
+            expect(headers.get('set-cookie')).toBe('first=foo,second=bar');
           }
         });
       });
