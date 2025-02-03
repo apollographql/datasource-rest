@@ -1,8 +1,3 @@
-import nodeFetch, {
-  Response as NodeFetchResponse,
-  Headers as NodeFetchHeaders,
-  type HeadersInit as NodeFetchHeadersInit,
-} from 'node-fetch';
 import CachePolicy from 'http-cache-semantics';
 import type { Options as HttpCacheSemanticsOptions } from 'http-cache-semantics';
 import type { Fetcher, FetcherResponse } from '@apollo/utils.fetcher';
@@ -39,7 +34,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
 
   constructor(
     keyValueCache: KeyValueCache = new InMemoryLRUCache<string, CO>(),
-    httpFetch: Fetcher = nodeFetch,
+    httpFetch: Fetcher = fetch,
   ) {
     this.keyValueCache = new PrefixingKeyValueCache(
       keyValueCache,
@@ -110,7 +105,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
     // Remove url from the policy, because otherwise it would never match a
     // request with a custom cache key (ie, we want users to be able to tell us
     // that two requests should be treated as the same even if the URL differs).
-    const urlFromPolicy = policy._url;
+    //const urlFromPolicy = policy._url;
     policy._url = undefined;
 
     if (
@@ -125,9 +120,10 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
       // the cache entry was not created with an explicit TTL override and the
       // header-based cache policy says we can safely use the cached response.
       const headers = policy.responseHeaders();
+
       return {
-        response: new NodeFetchResponse(body, {
-          url: urlFromPolicy,
+        response: new Response(body, {
+          //url: urlFromPolicy,
           status: policy._status,
           headers: cachePolicyHeadersToNodeFetchHeadersInit(headers),
         }),
@@ -168,16 +164,13 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
 
       return this.storeResponseAndReturnClone(
         urlString,
-        new NodeFetchResponse(
-          modified ? await revalidationResponse.text() : body,
-          {
-            url: revalidatedPolicy._url,
-            status: revalidatedPolicy._status,
-            headers: cachePolicyHeadersToNodeFetchHeadersInit(
-              revalidatedPolicy.responseHeaders(),
-            ),
-          },
-        ),
+        new Response(modified ? await revalidationResponse.text() : body, {
+          //url: revalidatedPolicy._url,
+          status: revalidatedPolicy._status,
+          headers: cachePolicyHeadersToNodeFetchHeadersInit(
+            revalidatedPolicy.responseHeaders(),
+          ),
+        }),
         requestOpts,
         revalidatedPolicy,
         cacheKey,
@@ -308,13 +301,14 @@ function policyResponseFrom(response: FetcherResponse) {
   return {
     status: response.status,
     headers:
-      response.headers instanceof NodeFetchHeaders &&
       // https://github.com/apollo-server-integrations/apollo-server-integration-cloudflare-workers/issues/37
       // For some reason, Cloudflare Workers' `response.headers` is passing
       // the instanceof check here but doesn't have the `raw()` method that
       // node-fetch's headers have.
       'raw' in response.headers
-        ? nodeFetchHeadersToCachePolicyHeaders(response.headers)
+        ? nodeFetchHeadersToCachePolicyHeaders(
+            response.headers as { raw(): Record<string, string[]> },
+          )
         : Object.fromEntries(response.headers),
   };
 }
@@ -330,9 +324,9 @@ function policyResponseFrom(response: FetcherResponse) {
 // (like set-cookie) because we store the CachePolicy in the cache, but not the
 // interesting ones that we hope were singletons, so this function
 // de-singletonizes singleton response headers.
-function nodeFetchHeadersToCachePolicyHeaders(
-  headers: NodeFetchHeaders,
-): CachePolicy.Headers {
+function nodeFetchHeadersToCachePolicyHeaders(headers: {
+  raw(): Record<string, string[]>;
+}): CachePolicy.Headers {
   const cachePolicyHeaders = Object.create(null);
   for (const [name, values] of Object.entries(headers.raw())) {
     cachePolicyHeaders[name] = values.length === 1 ? values[0] : values;
@@ -346,7 +340,7 @@ function nodeFetchHeadersToCachePolicyHeaders(
 // duplicate headers.
 function cachePolicyHeadersToNodeFetchHeadersInit(
   headers: CachePolicy.Headers,
-): NodeFetchHeadersInit {
+) {
   const headerList = [];
   for (const [name, value] of Object.entries(headers)) {
     if (Array.isArray(value)) {
