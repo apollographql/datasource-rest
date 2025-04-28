@@ -25,3 +25,4 @@ singletonizes
 unmock
 userland
 withrequired
+arraybuffer
