@@ -97,7 +97,7 @@ export class HTTPCache<CO extends CacheOptions = CacheOptions> {
       const response = await this.httpFetch(urlString, requestOpts);
       const parsedBody = await response.json();
 
-      if ((cacheOptions as CacheOptions)?.ttl) {
+      if ((cacheOptions as CacheOptions)?.ttl && response.status >= 200 && response.status <= 299) {
         const cacheWritePromise = this.keyValueCache.set(
           cacheKey,
           parsedBody,
