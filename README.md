@@ -220,6 +220,9 @@ You can also throw a different error here altogether. Note that by default, erro
 
 This method is called with the HTTP response and should read the body and parse it into an appropriate format. By default, it checks to see if the `Content-Type` header starts with `application/json` or ends with `+json` (just looking at the header as a string without using a Content-Type parser) and returns `response.json()` if it does or `response.text()` if it does not. If you want to read the body in a different way, override this. This method should read the response fully; if it does not, it could cause a memory leak inside the HTTP cache. If you override this, you may want to override `cloneParsedBody` as well.
 
+You can send option to within the request called `responseType`, which will override the logic above and return the 
+response with given type. Supported types are `arraybuffer`, `text` and `json`. The default value to use is `json`.
+
 ##### `cloneParsedBody`
 
 This method is used to clone a body (for use by the request deduplication feature so that multiple callers get distinct return values that can be separately mutated). If your `parseBody` returns values other than basic JSON objects, you might want to override this method too. You can also change this method to return its argument without cloning if your code that uses this class is OK with the values returned from deduplicated requests sharing state.
@@ -293,6 +296,26 @@ class MoviesAPI extends RESTDataSource {
 All of the HTTP helper functions (`get`, `put`, `post`, `patch`, `delete`, and `head`) accept a second parameter for setting the `body`, `headers`, `params`, `cacheKey`, and `cacheOptions` (and other Fetch API options).
 
 Alternatively, you can use the `fetch` method. The return value of this method is a `DataSourceFetchResult`, which contains `parsedBody`, `response`, and some other fields with metadata about how the operation interacted with the cache.
+
+### Setting response type option
+
+If you would like to hard set the response type fetch should treat the source response with, you can use 
+`responseType` option to set it. 
+
+Example of getting the response as `arraybuffer`. Supported values are `text`, `arraybuffer` and `json`.
+
+```ts
+class PersonalizationAPI extends RESTDataSource {
+  // Get ArrayBuffer
+  async getMoviePosterPDF(id) {
+    return this.get(
+      `movies/posters/${encodeURIComponent(id)}`, {
+        responseType: 'arraybuffer',
+      }
+    );
+  }
+}
+```
 
 ### Intercepting fetches
 
