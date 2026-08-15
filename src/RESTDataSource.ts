@@ -612,8 +612,9 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
         policy.deduplicationKey,
       );
       if (previousRequestPromise) {
-        const previousConsumers =
-          this.deduplicationConsumers.get(previousRequestPromise);
+        const previousConsumers = this.deduplicationConsumers.get(
+          previousRequestPromise,
+        );
         if (previousConsumers) {
           previousConsumers.count += 1;
         }
