@@ -195,6 +195,10 @@ export type RequestDeduplicationPolicy =
 export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
   protected httpCache: HTTPCache<CO>;
   protected deduplicationPromises = new Map<string, Promise<any>>();
+  private deduplicationConsumers = new WeakMap<
+    Promise<any>,
+    { count: number }
+  >();
   baseURL?: string;
   logger: Logger;
 
@@ -324,17 +328,41 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
       'requestDeduplication'
     >,
     requestDeduplicationResult: RequestDeduplicationResult,
+    cloneParsedBody = true,
   ): DataSourceFetchResult<TResult> {
     return {
       ...dataSourceFetchResult,
       requestDeduplication: requestDeduplicationResult,
-      parsedBody: this.cloneParsedBody(dataSourceFetchResult.parsedBody),
+      parsedBody: cloneParsedBody
+        ? this.cloneParsedBody(dataSourceFetchResult.parsedBody)
+        : dataSourceFetchResult.parsedBody,
     };
   }
 
   protected cloneParsedBody<TResult>(parsedBody: TResult) {
     // consider using `structuredClone()` when we drop support for Node 16
     return cloneDeep(parsedBody);
+  }
+
+  /**
+   * Whether a caller of a deduplicated request should receive an independent
+   * clone of the parsed body.
+   *
+   * The default is `true`, which preserves isolation: mutating one caller's
+   * `parsedBody` does not affect other callers sharing the same HTTP request.
+   *
+   * Under high fan-out (many resolvers sharing one GET), that isolation costs
+   * one deep clone per consumer. Override and return `false` when callers treat
+   * the body as immutable to eliminate those clones. The default still skips
+   * cloning when `deduplicate-during-request-lifetime` has only a single
+   * consumer, because there is then nothing to isolate.
+   *
+   * Overriding `cloneParsedBody` to return its argument also skips these copies;
+   * this hook is the more explicit opt-out for "do not isolate deduplicated
+   * results."
+   */
+  protected shouldCloneParsedBodyForDeduplication(): boolean {
+    return true;
   }
 
   protected shouldJSONSerializeBody(
@@ -583,19 +611,32 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
       const previousRequestPromise = this.deduplicationPromises.get(
         policy.deduplicationKey,
       );
-      if (previousRequestPromise)
-        return previousRequestPromise.then((result) =>
-          this.cloneDataSourceFetchResult(result, {
+      if (previousRequestPromise) {
+        const previousConsumers =
+          this.deduplicationConsumers.get(previousRequestPromise);
+        if (previousConsumers) {
+          previousConsumers.count += 1;
+        }
+        return previousRequestPromise.then((result) => {
+          const requestDeduplicationResult: RequestDeduplicationResult = {
             policy,
             deduplicatedAgainstPreviousRequest: true,
-          }),
-        );
+          };
+          return this.cloneDataSourceFetchResult(
+            result,
+            requestDeduplicationResult,
+            this.shouldCloneParsedBodyForDeduplication(),
+          );
+        });
+      }
 
       const thisRequestPromise = performRequest();
       this.deduplicationPromises.set(
         policy.deduplicationKey,
         thisRequestPromise,
       );
+      const consumers = { count: 1 };
+      this.deduplicationConsumers.set(thisRequestPromise, consumers);
       try {
         // The request promise needs to be awaited here rather than just
         // returned. This ensures that the request completes before it's removed
@@ -603,13 +644,29 @@ export abstract class RESTDataSource<CO extends CacheOptions = CacheOptions> {
         // deduplication cache is cleared in the event of an error during the
         // request.
         //
-        // Note: we could try to get fancy and only clone if no de-duplication
-        // happened (and we're "deduplicate-during-request-lifetime") but we
-        // haven't quite bothered yet.
-        return this.cloneDataSourceFetchResult(await thisRequestPromise, {
+        // Skip cloning when this is the only consumer and the result will not
+        // stay cached (`deduplicate-during-request-lifetime`). Concurrent
+        // waiters and `deduplicate-until-invalidated` still need a clone so
+        // callers can mutate independently.
+        const result = await thisRequestPromise;
+        const requestDeduplicationResult: RequestDeduplicationResult = {
           policy,
           deduplicatedAgainstPreviousRequest: false,
-        });
+        };
+        // Concurrent waiters and `deduplicate-until-invalidated` need isolation
+        // by default. A sole `deduplicate-during-request-lifetime` consumer
+        // does not. Subclasses can skip remaining clones via
+        // `shouldCloneParsedBodyForDeduplication`.
+        const needsIsolation =
+          consumers.count > 1 ||
+          policy.policy === 'deduplicate-until-invalidated';
+        const shouldCloneParsedBody =
+          needsIsolation && this.shouldCloneParsedBodyForDeduplication();
+        return this.cloneDataSourceFetchResult(
+          result,
+          requestDeduplicationResult,
+          shouldCloneParsedBody,
+        );
       } finally {
         if (policy.policy === 'deduplicate-during-request-lifetime') {
           this.deduplicationPromises.delete(policy.deduplicationKey);
