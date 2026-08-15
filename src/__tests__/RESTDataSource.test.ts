@@ -1105,6 +1105,189 @@ describe('RESTDataSource', () => {
         `);
       });
 
+      it('does not clone a request-lifetime result with a single consumer', async () => {
+        let cloneCount = 0;
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          protected override cloneParsedBody<TResult>(parsedBody: TResult) {
+            cloneCount += 1;
+            return super.cloneParsedBody(parsedBody);
+          }
+
+          getFoo(id: number) {
+            return this.fetch(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(200, { hi: 42 });
+        nock(apiUrl).get('/foo/1').reply(200, { hi: 43 });
+
+        await dataSource.getFoo(1);
+        await dataSource.getFoo(1);
+        expect(cloneCount).toEqual(0);
+      });
+
+      it('clones parsed body for each concurrent consumer', async () => {
+        let cloneCount = 0;
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          protected override cloneParsedBody<TResult>(parsedBody: TResult) {
+            cloneCount += 1;
+            return super.cloneParsedBody(parsedBody);
+          }
+
+          getFoo(id: number) {
+            return this.fetch(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(200, { hi: 42 });
+
+        await Promise.all([dataSource.getFoo(1), dataSource.getFoo(1)]);
+        expect(cloneCount).toEqual(2);
+      });
+
+      it('clones parsed body once per concurrent consumer under high fan-out', async () => {
+        const consumerCount = 100;
+        let cloneCount = 0;
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          protected override cloneParsedBody<TResult>(parsedBody: TResult) {
+            cloneCount += 1;
+            return super.cloneParsedBody(parsedBody);
+          }
+
+          getFoo(id: number) {
+            return this.fetch(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(200, { hi: 42 });
+
+        await Promise.all(
+          Array.from({ length: consumerCount }, () => dataSource.getFoo(1)),
+        );
+        expect(cloneCount).toEqual(consumerCount);
+      });
+
+      it('does not clone under high fan-out when shouldCloneParsedBodyForDeduplication is false', async () => {
+        const consumerCount = 100;
+        let cloneCount = 0;
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+
+          protected override shouldCloneParsedBodyForDeduplication(): boolean {
+            return false;
+          }
+
+          protected override cloneParsedBody<TResult>(parsedBody: TResult) {
+            cloneCount += 1;
+            return super.cloneParsedBody(parsedBody);
+          }
+
+          getFoo(id: number) {
+            return this.fetch<{ hi: number }>(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(200, { hi: 42 });
+
+        const results = await Promise.all(
+          Array.from({ length: consumerCount }, () => dataSource.getFoo(1)),
+        );
+        expect(cloneCount).toEqual(0);
+        expect(results).toHaveLength(consumerCount);
+        for (const result of results) {
+          expect(result.parsedBody).toEqual({ hi: 42 });
+          expect(result.parsedBody).toBe(results[0].parsedBody);
+        }
+      });
+
+      it('clones parsed body for deduplicate-until-invalidated so later callers are isolated', async () => {
+        let cloneCount = 0;
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+          protected override requestDeduplicationPolicyFor(
+            url: URL,
+            request: WithRequired<RequestOptions, 'method'>,
+          ): RequestDeduplicationPolicy {
+            const p = super.requestDeduplicationPolicyFor(url, request);
+            return p.policy === 'deduplicate-during-request-lifetime'
+              ? {
+                  policy: 'deduplicate-until-invalidated',
+                  deduplicationKey: p.deduplicationKey,
+                }
+              : p;
+          }
+
+          protected override cloneParsedBody<TResult>(parsedBody: TResult) {
+            cloneCount += 1;
+            return super.cloneParsedBody(parsedBody);
+          }
+
+          getFoo(id: number) {
+            return this.fetch<{ hi: number }>(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(200, { hi: 42 });
+
+        const r1 = await dataSource.getFoo(1);
+        r1.parsedBody.hi = 99;
+        const r2 = await dataSource.getFoo(1);
+        expect(r1.parsedBody.hi).toEqual(99);
+        expect(r2.parsedBody.hi).toEqual(42);
+        expect(cloneCount).toEqual(2);
+      });
+
+      // Opting out of cloning under `deduplicate-until-invalidated` is the
+      // most dangerous mode: the shared parsed result stays cached and later
+      // callers receive the same object. Mutations are intentionally visible
+      // across sequential callers (aliased, not isolated).
+      it('does not clone under deduplicate-until-invalidated when shouldCloneParsedBodyForDeduplication is false', async () => {
+        let cloneCount = 0;
+        const dataSource = new (class extends RESTDataSource {
+          override baseURL = 'https://api.example.com';
+          protected override requestDeduplicationPolicyFor(
+            url: URL,
+            request: WithRequired<RequestOptions, 'method'>,
+          ): RequestDeduplicationPolicy {
+            const p = super.requestDeduplicationPolicyFor(url, request);
+            return p.policy === 'deduplicate-during-request-lifetime'
+              ? {
+                  policy: 'deduplicate-until-invalidated',
+                  deduplicationKey: p.deduplicationKey,
+                }
+              : p;
+          }
+
+          protected override shouldCloneParsedBodyForDeduplication(): boolean {
+            return false;
+          }
+
+          protected override cloneParsedBody<TResult>(parsedBody: TResult) {
+            cloneCount += 1;
+            return super.cloneParsedBody(parsedBody);
+          }
+
+          getFoo(id: number) {
+            return this.fetch<{ hi: number }>(`foo/${id}`);
+          }
+        })();
+
+        nock(apiUrl).get('/foo/1').reply(200, { hi: 42 });
+
+        const r1 = await dataSource.getFoo(1);
+        r1.parsedBody.hi = 99;
+        const r2 = await dataSource.getFoo(1);
+        expect(cloneCount).toEqual(0);
+        expect(r2.parsedBody).toBe(r1.parsedBody);
+        expect(r2.parsedBody.hi).toEqual(99);
+      });
+
       it('does not deduplicate non-GET requests by default', async () => {
         const dataSource = new (class extends RESTDataSource {
           override baseURL = 'https://api.example.com';
