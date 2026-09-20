@@ -33,7 +33,7 @@
     "changeset-check": "changeset status --verbose --since=origin/main"
   },
   "devDependencies": {
-    "@apollo/server": "4.12.0",
+    "@apollo/server": "5.5.0",
     "@changesets/changelog-github": "0.5.1",
     "@changesets/cli": "2.29.2",
     "@types/jest": "29.5.14",
