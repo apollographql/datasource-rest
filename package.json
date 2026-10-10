@@ -34,7 +34,7 @@
   },
   "devDependencies": {
     "@apollo/server": "4.12.0",
-    "@changesets/changelog-github": "0.5.1",
+    "@changesets/changelog-github": "1.0.1",
     "@changesets/cli": "2.29.2",
     "@types/jest": "29.5.14",
     "@types/lodash.clonedeep": "4.5.9",
